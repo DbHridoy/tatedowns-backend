@@ -17,6 +17,9 @@ export interface DesignConsultationDocument extends Document {
 
   // Scheduling
   estimatedStartDate?: Date;
+
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const DesignConsultationSchema = new Schema<DesignConsultationDocument>(
