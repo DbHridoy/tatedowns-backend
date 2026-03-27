@@ -70,10 +70,6 @@ export class ExpenseService {
       });
     }
 
-    await createNotificationsForRole("Admin", {
-      type: "mileage_updated",
-      message: "A mileage log was updated",
-    });
     return updatedMileage;
   };
 

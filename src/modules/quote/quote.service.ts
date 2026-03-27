@@ -4,7 +4,6 @@ import { ClientRepository } from "../client/client.repository";
 import { JobRepository } from "../job/job.repository";
 import {
   createNotification,
-  createNotificationsForRole,
 } from "../../utils/create-notification-utils";
 import { apiError } from "../../errors/api-error";
 import { Errors } from "../../constants/error-codes";
@@ -70,16 +69,6 @@ export class QuoteService {
       newQuote.clientId.toString(),
       "Quoted"
     );
-    if (quoteInfo?.notes) {
-      await createNotificationsForRole("Admin", {
-        type: "note_added",
-        message: "A note was added to a quote",
-      });
-    }
-    await createNotificationsForRole("Admin", {
-      type: "client_converted_quote",
-      message: "A client was converted into a quote",
-    });
     return newQuote;
   };
 
@@ -132,10 +121,6 @@ export class QuoteService {
           message: `Quote status changed from ${previousStatus || "N/A"} to ${nextStatus || "N/A"}`,
         });
       }
-      await createNotificationsForRole("Admin", {
-        type: "quote_status_updated",
-        message: `A quote status changed from ${previousStatus || "N/A"} to ${nextStatus || "N/A"}`,
-      });
     }
     if (!bidSheetUrl) {
       return updatedQuote;

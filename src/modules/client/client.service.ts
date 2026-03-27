@@ -4,7 +4,6 @@ import { apiError } from "../../errors/api-error";
 import { Errors } from "../../constants/error-codes";
 import {
   createNotification,
-  createNotificationsForRole,
 } from "../../utils/create-notification-utils";
 import { SalesRepRepository } from "../sales-rep/sales-rep.repository";
 import { CommonService } from "../common/common.service";
@@ -63,14 +62,6 @@ export class ClientService {
       );
     }
 
-    await createNotificationsForRole("Admin", {
-      type: "client_created",
-      message: `Client ${newClient.clientName ||
-        newClient.customClientId ||
-        newClient._id
-        } created`,
-    });
-
     if (newClient.salesRepId) {
       await createNotification({
         forUser: newClient.salesRepId.toString(),
@@ -117,10 +108,6 @@ export class ClientService {
       clientNotePayload
     );
 
-    await createNotificationsForRole("Admin", {
-      type: "note_added",
-      message: "A note was added to a client",
-    });
     if (clientNotePayload.jobId) {
       const job = await Job.findById(clientNotePayload.jobId).select(
         "productionManagerId"
@@ -185,10 +172,6 @@ export class ClientService {
         forUser: newSalesRepId,
         type: "client_assigned",
         message: `You have been assigned a new client: ${updatedClient?.clientName || updatedClient?._id}`,
-      });
-      await createNotificationsForRole("Admin", {
-        type: "client_reassigned",
-        message: `Client ${updatedClient?.clientName || updatedClient?._id} was reassigned`,
       });
     }
     return updatedClient;

@@ -6,6 +6,7 @@ import { logger } from "../../utils/logger";
 import { Job } from "./job.model";
 import { DesignConsultation } from "./design-consultation.model";
 import {
+  createAdminNotificationForJobStatus,
   createNotification,
   createNotificationsForRole,
 } from "../../utils/create-notification-utils";
@@ -120,10 +121,9 @@ export class JobController {
           message: `Job status changed from ${job.status || "N/A"} to ${nextJobStatus}`,
         });
       }
-      await createNotificationsForRole("Admin", {
-        type: "job_status_updated",
-        message: `Job status changed from ${job.status || "N/A"} to ${nextJobStatus}`,
-      });
+      if (nextJobStatus === "DC Awaiting Approval") {
+        await createAdminNotificationForJobStatus(nextJobStatus);
+      }
       if (nextJobStatus === "Ready to Schedule") {
         await createNotificationsForRole("Production Manager", {
           type: "job_status_ready_to_schedule",
@@ -224,10 +224,9 @@ export class JobController {
             message: `Job status changed from ${job.status || "N/A"} to ${nextJobStatus}`,
           });
         }
-        await createNotificationsForRole("Admin", {
-          type: "job_status_updated",
-          message: `Job status changed from ${job.status || "N/A"} to ${nextJobStatus}`,
-        });
+        if (nextJobStatus === "DC Awaiting Approval") {
+          await createAdminNotificationForJobStatus(nextJobStatus);
+        }
         if (nextJobStatus === "Ready to Schedule") {
           await createNotificationsForRole("Production Manager", {
             type: "job_status_ready_to_schedule",
