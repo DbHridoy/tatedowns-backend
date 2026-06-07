@@ -13,6 +13,7 @@ import { logger } from "../../utils/logger";
 import User from "../user/user.model";
 import { SalesRepPayment } from "./payment.model";
 import { SalesRep } from "../sales-rep/sales-rep.model";
+import { DesignConsultation } from "../job/design-consultation.model";
 
 const getCalendarPeriodRange = (date: Date, periodType: string) => {
   const base = new Date(date);
@@ -132,6 +133,7 @@ export class CommonRepository {
       closedCount,
       cancelledCount,
       soldAgg,
+      totalUpsellAgg,
       scheduledAndOpenAgg,
       pendingCloseAgg,
       closedAgg,
@@ -148,6 +150,10 @@ export class CommonRepository {
       Job.aggregate([
         { $match: { status: { $ne: "Cancelled" }, ...dateFilter } },
         { $group: { _id: null, total: { $sum: "$price" } } },
+      ]),
+      DesignConsultation.aggregate([
+        { $match: { ...dateFilter } },
+        { $group: { _id: null, total: { $sum: { $convert: { input: "$upsellValue", to: "double", onError: 0, onNull: 0 } } } } },
       ]),
       Job.aggregate([
         { $match: { status: "Scheduled and Open", ...dateFilter } },
@@ -182,6 +188,7 @@ export class CommonRepository {
         (pendingCloseAgg[0]?.total || 0),
       totalRevenueProduced: closedAgg[0]?.total || 0,
       totalRevenue: totalRevenueAgg[0]?.total || 0,
+      totalUpsell: totalUpsellAgg[0]?.total || 0,
     };
   };
 
