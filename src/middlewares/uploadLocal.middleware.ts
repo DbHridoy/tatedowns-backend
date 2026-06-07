@@ -13,7 +13,7 @@ interface UploadOptions {
 
 export const uploadFile = ({
   fieldName,
-  maxSizeMB = 5,
+  maxSizeMB = 50,
   uploadType = "single",
   maxCount = 10, // default for array
 }: UploadOptions) => {

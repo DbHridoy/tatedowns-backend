@@ -119,7 +119,7 @@ export class SalesRepRepository {
                 totalRevenueSold: {
                   $sum: {
                     $cond: [
-                      { $eq: ["$status", "Ready to Schedule"] },
+                      { $ne: ["$status", "Cancelled"] },
                       "$price",
                       0,
                     ],
@@ -214,9 +214,24 @@ export class SalesRepRepository {
       },
       {
         $project: {
-          clientAgg: 0,
-          quoteAgg: 0,
-          jobAgg: 0,
+          _id: 1,
+          userId: 1,
+          cluster: 1,
+          user: {
+            _id: 1,
+            fullName: 1,
+            email: 1,
+            role: 1,
+            cluster: 1,
+            address: 1,
+            phoneNumber: 1,
+            profileImage: 1,
+          },
+          totalRevenueProduced: 1,
+          totalRevenueSold: 1,
+          totalJobs: 1,
+          totalQuotes: 1,
+          totalClients: 1,
         },
       },
       {

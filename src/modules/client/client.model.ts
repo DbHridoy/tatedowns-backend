@@ -10,9 +10,13 @@ export interface ClientDocument extends Document {
   phoneNumber: string;
   email: string;
   address: string;
+  city: string;
+  state: string;
+  zipCode: string;
   leadSource: "Door to Door" | "Inbound" | "Social";
   leadStatus: "Not quoted" | "Quoted" | "Job";
   rating: number;
+  yearBuilt: string;
   createdBy: Types.ObjectId;
 }
 const clientSchema = new Schema(
@@ -24,18 +28,21 @@ const clientSchema = new Schema(
     createdBy: {
       type: Types.ObjectId,
       ref: "User",
-      required: true,
     },
     customClientId: String,
     clientName: { type: String, required: true },
     partnerName: String,
-    phoneNumber: String,
+    phoneNumber: { type: String, required: true },
     email: String,
-    address: String,
+    address: { type: String, required: true },
+    city: { type: String, required: true },
+    state: { type: String, default: "Illinois" },
+    zipCode: { type: String, required: true },
     leadSource: {
       type: String,
-      enum: ["Door to Door", "Inbound", "Social"],
+      enum: ["Door to Door", "Inbound", "Social", ""],
     },
+    yearBuilt: { type: String, required: true },
     leadStatus: {
       type: String,
       enum: ["Not quoted", "Quoted", "Job"],

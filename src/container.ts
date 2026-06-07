@@ -67,7 +67,8 @@ export const jobController = new JobController(jobService);
 export const quoteService = new QuoteService(
   quoteRepository,
   salesRepRepo,
-  clientRepo
+  clientRepo,
+  jobRepository
 );
 export const commonService = new CommonService(
   commonRepository,

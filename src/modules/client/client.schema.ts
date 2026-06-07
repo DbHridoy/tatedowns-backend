@@ -6,6 +6,9 @@ export const ClientSchema = z.object({
   phoneNumber: z.string(),
   email: z.email(),
   address: z.string(),
+  city: z.string(),
+  state: z.string().default("Illinois"),
+  zipCode: z.string(),
   leadSource: z.string(),
   rating: z.number(),
 });

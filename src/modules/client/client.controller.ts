@@ -8,7 +8,7 @@ export class ClientController {
   constructor(private clientService: ClientService) {}
 
   createClient = asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user!;
+    const user = req.user;
     const body = req.body;
 
     const newClient = await this.clientService.createClient({
@@ -27,7 +27,7 @@ export class ClientController {
     async (req: Request, res: Response, next: NextFunction) => {
       const { body } = req;
       const clientId = req.params.clientId;
-      const user = req.user!;
+      const user = req.user;
       const newCallLog = await this.clientService.createCallLog(
         body,
         clientId,
@@ -45,7 +45,7 @@ export class ClientController {
     async (req: Request, res: Response, next: NextFunction) => {
       const body = req.body;
       const clientId = req.params.clientId;
-      const user = req.user!;
+      const user = req.user;
 
       logger.info({ body }, "ClientController.createClientNote");
 

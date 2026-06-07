@@ -51,11 +51,13 @@ export class QuoteController {
     const { quoteId } = req.params;
     const { body } = req;
     const bidSheetUrl = req.file?.fileUrl;
+    const user = req.user!;
     logger.info({ body }, "QuoteController.updateQuoteById");
     const quote = await this.quoteService.updateQuoteById(
       quoteId,
       body,
-      bidSheetUrl
+      bidSheetUrl,
+      user
     );
     res.status(HttpCodes.Ok).json({ quote });
   };

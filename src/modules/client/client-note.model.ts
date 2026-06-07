@@ -30,7 +30,6 @@ const ClientNoteSchema = new Schema<ClientNoteDocument>(
     createdBy: {
       type: Types.ObjectId,
       ref: "User",
-      required: true,
     },
     note: {
       type: String,

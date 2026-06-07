@@ -13,6 +13,7 @@ import { logger } from "../../utils/logger";
 import User from "../user/user.model";
 import { SalesRepPayment } from "./payment.model";
 import { SalesRep } from "../sales-rep/sales-rep.model";
+import { DesignConsultation } from "../job/design-consultation.model";
 
 const getCalendarPeriodRange = (date: Date, periodType: string) => {
   const base = new Date(date);
@@ -131,7 +132,8 @@ export class CommonRepository {
       pendingCloseCount,
       closedCount,
       cancelledCount,
-      readyToScheduleAgg,
+      soldAgg,
+      totalUpsellAgg,
       scheduledAndOpenAgg,
       pendingCloseAgg,
       closedAgg,
@@ -146,8 +148,12 @@ export class CommonRepository {
       Job.countDocuments({ status: "Closed", ...dateFilter }),
       Job.countDocuments({ status: "Cancelled", ...dateFilter }),
       Job.aggregate([
-        { $match: { status: "Ready to Schedule", ...dateFilter } },
+        { $match: { status: { $ne: "Cancelled" }, ...dateFilter } },
         { $group: { _id: null, total: { $sum: "$price" } } },
+      ]),
+      DesignConsultation.aggregate([
+        { $match: { ...dateFilter } },
+        { $group: { _id: null, total: { $sum: { $convert: { input: "$upsellValue", to: "double", onError: 0, onNull: 0 } } } } },
       ]),
       Job.aggregate([
         { $match: { status: "Scheduled and Open", ...dateFilter } },
@@ -176,12 +182,13 @@ export class CommonRepository {
       pendingCloseCount,
       closedCount,
       cancelledCount,
-      totalRevenueSold: readyToScheduleAgg[0]?.total || 0,
+      totalRevenueSold: soldAgg[0]?.total || 0,
       totalRevenuePending:
         (scheduledAndOpenAgg[0]?.total || 0) +
         (pendingCloseAgg[0]?.total || 0),
       totalRevenueProduced: closedAgg[0]?.total || 0,
       totalRevenue: totalRevenueAgg[0]?.total || 0,
+      totalUpsell: totalUpsellAgg[0]?.total || 0,
     };
   };
 
@@ -246,6 +253,7 @@ export class CommonRepository {
       totalClients,
       totalQuotes,
       totalJobs,
+      closedJobsAgg,
       totalSoldAgg,
       commissionPendingAgg,
       commissionEarnedAgg,
@@ -268,6 +276,16 @@ export class CommonRepository {
         {
           $match: {
             salesRepId: salesRepObjectId,
+            status: "Closed",
+            updatedAt: { $gte: start, $lt: end },
+          },
+        },
+        { $count: "count" },
+      ]),
+      Job.aggregate([
+        {
+          $match: {
+            salesRepId: salesRepObjectId,
             status: { $ne: "Cancelled" },
             createdAt: { $gte: start, $lt: end },
           },
@@ -278,8 +296,8 @@ export class CommonRepository {
         {
           $match: {
             salesRepId: salesRepObjectId,
-            status: { $ne: "Closed" },
-            startDate: { $gte: start, $lt: end },
+            status: { $ne: "Cancelled" },
+            createdAt: { $gte: start, $lt: end },
           },
         },
         { $group: { _id: null, total: { $sum: "$price" } } },
@@ -321,6 +339,7 @@ export class CommonRepository {
       totalClients,
       totalQuotes,
       totalJobs,
+      closedJobs: closedJobsAgg[0]?.count || 0,
       totalCommissionPending: commissionPendingAgg[0]?.total || 0,
       totalCommissionEarned: commissionEarnedAgg[0]?.total || 0,
       totalRevenueSold: revenueEarnedAgg[0]?.total || 0,
@@ -339,7 +358,8 @@ export class CommonRepository {
       totalClients,
       totalQuotes,
       totalJobs,
-      readyToScheduleAgg,
+      closedJobsAgg,
+      soldAgg,
       closedAgg,
       pendingAgg,
       variable,
@@ -352,7 +372,17 @@ export class CommonRepository {
         {
           $match: {
             salesRepId: salesRepObjectId,
-            status: "Ready to Schedule",
+            status: "Closed",
+            ...dateFilter,
+          },
+        },
+        { $count: "count" },
+      ]),
+      Job.aggregate([
+        {
+          $match: {
+            salesRepId: salesRepObjectId,
+            status: { $ne: "Cancelled" },
             ...dateFilter,
           },
         },
@@ -386,7 +416,7 @@ export class CommonRepository {
 
     const commissionRate = Number(variable?.salesRepCommissionRate || 0);
     const normalizedCommissionRate = commissionRate / 100;
-    const totalRevenueSold = readyToScheduleAgg[0]?.total || 0;
+    const totalRevenueSold = soldAgg[0]?.total || 0;
     const totalRevenueProduced = closedAgg[0]?.total || 0;
     const totalCommissionEarned =
       (closedAgg[0]?.total || 0) * normalizedCommissionRate;
@@ -401,6 +431,7 @@ export class CommonRepository {
       totalClients,
       totalQuotes,
       totalJobs,
+      closedJobs: closedJobsAgg[0]?.count || 0,
       totalRevenueSold,
       totalRevenueProduced,
       totalCommissionEarned,
