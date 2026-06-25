@@ -41,7 +41,7 @@ export class UserRepository {
       await ProductionManager.create({
         userId: newUser._id,
       });
-    } else {
+    } else if (userBody.role === "Admin") {
       await Admin.create({
         userId: newUser._id,
       });

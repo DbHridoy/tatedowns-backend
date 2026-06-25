@@ -26,6 +26,14 @@ import { QuoteController } from "./modules/quote/quote.controller";
 import { buildDynamicSearch } from "./utils/dynamic-search-utils";
 import { SalesRepRepository } from "./modules/sales-rep/sales-rep.repository";
 import { ProductionManagerRepository } from "./modules/production-manager/production-manager.repository";
+import { CrewRepository } from "./modules/crew/crew.repository";
+import { CrewService } from "./modules/crew/crew.service";
+import { CrewController } from "./modules/crew/crew.controller";
+import { ProductionCalendarRepository } from "./modules/production-calendar/production-calendar.repository";
+import { ProductionCalendarService } from "./modules/production-calendar/production-calendar.service";
+import { ProductionCalendarController } from "./modules/production-calendar/production-calendar.controller";
+import { PainterService } from "./modules/painter/painter.service";
+import { PainterController } from "./modules/painter/painter.controller";
 
 export const hashUtils = new HashUtils();
 export const jwtUtils = new JwtUtils();
@@ -84,3 +92,15 @@ export const clientService = new ClientService(clientRepo, salesRepRepo, commonS
 export const clientController = new ClientController(clientService);
 export const expenseController = new ExpenseController(expenseService);
 export const quoteController = new QuoteController(quoteService);
+export const crewRepository = new CrewRepository();
+export const crewService = new CrewService(crewRepository);
+export const crewController = new CrewController(crewService);
+export const productionCalendarRepository = new ProductionCalendarRepository();
+export const productionCalendarService = new ProductionCalendarService(
+  productionCalendarRepository
+);
+export const productionCalendarController = new ProductionCalendarController(
+  productionCalendarService
+);
+export const painterService = new PainterService(userService, productionCalendarService, hashUtils);
+export const painterController = new PainterController(painterService);

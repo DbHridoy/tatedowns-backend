@@ -11,6 +11,10 @@ export const Errors = {
     code: 401,
     message: "Wrong credentials",
   },
+  BadRequest: {
+    code: 400,
+    message: "Bad request",
+  },
   NoToken: {
     code: 401,
     message: "No token provided",
