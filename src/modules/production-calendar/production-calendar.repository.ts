@@ -45,6 +45,7 @@ export class ProductionCalendarRepository {
       startDate: _startDate,
       endDate: _endDate,
       viewMode: _viewMode,
+      crewId: _crewId,
       ...filterableQuery
     } = query || {};
     const { filter, search } = buildDynamicSearch(ProductionSchedule, filterableQuery);
