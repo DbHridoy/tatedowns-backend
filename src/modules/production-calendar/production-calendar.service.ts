@@ -14,6 +14,20 @@ const addDays = (date: Date, days: number) => {
   return next;
 };
 
+const parseCalendarDate = (value: string | Date) => {
+  if (value instanceof Date) {
+    return new Date(value);
+  }
+
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  return new Date(String(value));
+};
+
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
 export class ProductionCalendarService {
@@ -171,7 +185,7 @@ export class ProductionCalendarService {
     const durationDays = Number(
       payload.durationDays || Math.max(1, Math.ceil(estimatedLaborHours / laborCapacityPerDay))
     );
-    const startDate = startOfDay(new Date(payload.startDate));
+    const startDate = startOfDay(parseCalendarDate(payload.startDate));
     const endDate = addDays(startDate, durationDays - 1);
 
     const item = await this.productionCalendarRepository.createScheduleItem({
@@ -218,9 +232,9 @@ export class ProductionCalendarService {
   getCalendar = async (query: any) => {
     const now = new Date();
     const startDate = query.startDate
-      ? startOfDay(new Date(String(query.startDate)))
+      ? startOfDay(parseCalendarDate(String(query.startDate)))
       : startOfDay(now);
-    let endDate = query.endDate ? startOfDay(new Date(String(query.endDate))) : undefined;
+    let endDate = query.endDate ? startOfDay(parseCalendarDate(String(query.endDate))) : undefined;
 
     if (!endDate && query.viewMode) {
       const map: Record<string, number> = {
@@ -283,13 +297,13 @@ export class ProductionCalendarService {
     };
     if (payload.startDate || payload.durationDays || payload.endDate) {
       const startDate = payload.startDate
-        ? startOfDay(new Date(String(payload.startDate)))
+        ? startOfDay(parseCalendarDate(String(payload.startDate)))
         : startOfDay(new Date(schedule.startDate));
       const durationDays = Number(payload.durationDays || schedule.durationDays);
       nextPayload.startDate = startDate;
       nextPayload.durationDays = durationDays;
       nextPayload.endDate = payload.endDate
-        ? startOfDay(new Date(String(payload.endDate)))
+        ? startOfDay(parseCalendarDate(String(payload.endDate)))
         : addDays(startDate, durationDays - 1);
     }
     return this.productionCalendarRepository.updateScheduleItem(id, nextPayload);
@@ -348,7 +362,7 @@ export class ProductionCalendarService {
     }
 
     const threshold = payload.affectedFromDate
-      ? startOfDay(new Date(String(payload.affectedFromDate)))
+      ? startOfDay(parseCalendarDate(String(payload.affectedFromDate)))
       : startOfDay(new Date(schedule.startDate));
     const crewId = String((schedule.crew as any)._id || schedule.crew);
     const schedules = await this.productionCalendarRepository.findCrewSchedulesFromDate(

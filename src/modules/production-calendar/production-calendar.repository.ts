@@ -2,6 +2,20 @@ import { Types } from "mongoose";
 import { ProductionSchedule } from "./production-schedule.model";
 import { buildDynamicSearch } from "../../utils/dynamic-search-utils";
 
+const parseCalendarDate = (value: string | Date) => {
+  if (value instanceof Date) {
+    return new Date(value);
+  }
+
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  return new Date(String(value));
+};
+
 export class ProductionCalendarRepository {
   createScheduleItem = async (payload: any) => {
     const item = new ProductionSchedule(payload);
@@ -27,7 +41,13 @@ export class ProductionCalendarRepository {
   };
 
   getCalendarItems = async (query: any) => {
-    const { filter, search } = buildDynamicSearch(ProductionSchedule, query);
+    const {
+      startDate: _startDate,
+      endDate: _endDate,
+      viewMode: _viewMode,
+      ...filterableQuery
+    } = query || {};
+    const { filter, search } = buildDynamicSearch(ProductionSchedule, filterableQuery);
     const finalFilter: any = { ...filter };
     if (query.crewId) {
       finalFilter.crew = new Types.ObjectId(String(query.crewId));
@@ -36,12 +56,19 @@ export class ProductionCalendarRepository {
       finalFilter.status = query.status;
     }
     if (query.startDate || query.endDate) {
-      finalFilter.startDate = {};
-      if (query.startDate) {
-        finalFilter.startDate.$gte = new Date(String(query.startDate));
-      }
-      if (query.endDate) {
-        finalFilter.startDate.$lte = new Date(String(query.endDate));
+      const rangeStart = query.startDate ? parseCalendarDate(String(query.startDate)) : null;
+      const rangeEnd = query.endDate ? parseCalendarDate(String(query.endDate)) : null;
+
+      if (rangeStart && rangeEnd) {
+        finalFilter.$and = [
+          ...(finalFilter.$and || []),
+          { startDate: { $lte: rangeEnd } },
+          { endDate: { $gte: rangeStart } },
+        ];
+      } else if (rangeStart) {
+        finalFilter.endDate = { $gte: rangeStart };
+      } else if (rangeEnd) {
+        finalFilter.startDate = { $lte: rangeEnd };
       }
     }
 
