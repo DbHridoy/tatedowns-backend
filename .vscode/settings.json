@@ -19,5 +19,8 @@
     "type": "shell",
     "command": "npm run lint",
     "runOn": "folderOpen"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
   }
 }

@@ -26,7 +26,7 @@ export class ClientController {
   createCallLog = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
       const { body } = req;
-      const clientId = req.params.clientId;
+      const clientId = String(req.params.clientId);
       const user = req.user;
       const newCallLog = await this.clientService.createCallLog(
         body,
@@ -44,7 +44,7 @@ export class ClientController {
   createClientNote = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
       const body = req.body;
-      const clientId = req.params.clientId;
+      const clientId = String(req.params.clientId);
       const user = req.user;
 
       logger.info({ body }, "ClientController.createClientNote");
@@ -86,7 +86,7 @@ export class ClientController {
 
   getClientById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const clientId = req.params.clientId;
+      const clientId = String(req.params.clientId);
       const client = await this.clientService.getClientById(clientId);
       res.status(HttpCodes.Ok).json({
         success: true,
@@ -110,7 +110,7 @@ export class ClientController {
 
   getCallLogsByClientId = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const clientId = req.params.clientId;
+      const clientId = String(req.params.clientId);
       const callLogs = await this.clientService.getCallLogByClientId(
         clientId,
         req.query
@@ -126,7 +126,7 @@ export class ClientController {
 
   getContractsByClientId = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const clientId = req.params.clientId;
+      const clientId = String(req.params.clientId);
       const contracts = await this.clientService.getContractsByClientId(
         clientId,
         req.query
@@ -156,14 +156,14 @@ export class ClientController {
 
   getClientNotesByClientId = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const clientId = req.params.clientId;
+      const clientId = String(req.params.clientId);
       const clientNotes = this.clientService.getClientNoteByClientId;
     }
   );
 
   updateClient = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const clientId = req.params.clientId;
+      const clientId = String(req.params.clientId);
       const updatedClientInfo = req.body;
       const updatedClient = await this.clientService.updateClient(
         clientId,
@@ -179,7 +179,7 @@ export class ClientController {
 
   deleteClient = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const clientId = req.params.clientId;
+      const clientId = String(req.params.clientId);
       const deletedClient = await this.clientService.deleteClient(clientId);
       res.status(HttpCodes.Ok).json({
         success: true,

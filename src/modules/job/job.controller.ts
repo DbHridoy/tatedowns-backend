@@ -274,7 +274,7 @@ export class JobController {
 
   getJobById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const jobId = req.params.jobId;
+      const jobId = String(req.params.jobId);
       // logger.info({ jobId }, "JobController.getJobById");
       const job = await this.jobService.getJobById(jobId);
       res.status(HttpCodes.Ok).json({
@@ -302,7 +302,7 @@ export class JobController {
 
   getDesignConsultationById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { id } = req.params;
+      const id = String(req.params.id);
       const designConsultation =
         await this.jobService.getDesignConsultationById(id);
       res.status(HttpCodes.Ok).json({
@@ -345,7 +345,7 @@ export class JobController {
 
   getAllJobBySalesRepId = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { salesRepId } = req.params;
+      const salesRepId = String(req.params.salesRepId);
       const jobs = await this.jobService.getAllJobBySalesRepId(
         salesRepId,
         req.query
@@ -369,7 +369,7 @@ export class JobController {
 
   updateJobById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const jobId = req.params.jobId;
+      const jobId = String(req.params.jobId);
       const jobInfo = req.body;
       logger.info(jobInfo, "JobController.updateJobById line 39");
       const user = req.user!;
@@ -384,7 +384,7 @@ export class JobController {
 
   assignSalesRep = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const salesRepId = req.body.salesRepId
-    const jobId = req.params.jobId
+    const jobId = String(req.params.jobId)
     const updatedJob = await this.jobService.assignSalesRep(salesRepId, jobId)
     res.status(HttpCodes.Ok).json({
       success: true,
@@ -395,7 +395,7 @@ export class JobController {
 
   deleteJobById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const jobId = req.params.jobId;
+      const jobId = String(req.params.jobId);
       const job = await this.jobService.deleteJobById(jobId);
       res.status(HttpCodes.Ok).json({
         success: true,

@@ -41,7 +41,7 @@ export const createNotificationsForUsers = async (
 };
 
 export const createNotificationsForRole = async (
-  role: "Admin" | "Sales Rep" | "Production Manager",
+  role: "Admin" | "Sales Rep" | "Production Manager" | "Painter",
   input: Omit<CreateNotificationsForUsersInput, "userIds">
 ) => {
   const users = await User.find({ role }).select("_id");

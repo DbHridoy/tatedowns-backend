@@ -15,7 +15,11 @@ const userSchema = new Schema(
     role: {
       type: String,
       required: true,
-      enum: ["Admin", "Sales Rep", "Production Manager"],
+      enum: ["Admin", "Sales Rep", "Production Manager", "Painter"],
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
     profileImage: {
       type: String,

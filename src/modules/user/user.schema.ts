@@ -7,9 +7,10 @@ const UserSchema = z.object({
   phoneNumber: z.string(),
   address: z.string(),
   cluster: z.string(),
-  role: z.enum(["Admin", "Sales Rep", "Production Manager"]),
+  role: z.enum(["Admin", "Sales Rep", "Production Manager", "Painter"]),
   password: z.string(),
   profileImage: z.string(),
+  isActive: z.boolean(),
 });
 
 // Schema for updating user (other roles) — role and cluster omitted, all optional
@@ -23,6 +24,8 @@ export const CreateUserSchema = UserSchema.omit({
   phoneNumber: true,
   address: true,
   profileImage: true,
+  isActive: true,
 }).extend({
   cluster: z.string().optional(),
+  isActive: z.boolean().optional(),
 });
