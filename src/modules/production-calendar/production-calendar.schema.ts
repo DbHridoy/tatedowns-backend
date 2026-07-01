@@ -21,13 +21,13 @@ export const UpdateScheduleSchema = z.object({
   endDate: dateStringSchema.optional(),
   durationDays: z.coerce.number().int().positive().optional(),
   laborCapacityPerDay: z.coerce.number().positive().optional(),
-  status: z.enum(["Not Started", "In Progress", "Delayed", "Completed"]).optional(),
+  status: z.enum(["Scheduled and Open", "Pending Close"]).optional(),
   notes: z.string().trim().optional(),
   displayOrder: z.coerce.number().int().nonnegative().optional(),
 });
 
 export const UpdateScheduleStatusSchema = z.object({
-  status: z.enum(["Not Started", "In Progress", "Delayed", "Completed"]),
+  status: z.enum(["Scheduled and Open", "Pending Close"]),
 });
 
 export const RainDelaySchema = z.object({
@@ -41,6 +41,6 @@ export const CalendarQuerySchema = z.object({
   endDate: dateStringSchema.optional(),
   viewMode: z.enum(["twoWeeks", "month", "threeMonths"]).optional(),
   crewId: objectIdSchema.optional(),
-  status: z.enum(["Not Started", "In Progress", "Delayed", "Completed"]).optional(),
+  status: z.enum(["Scheduled and Open", "Pending Close"]).optional(),
   search: z.string().optional(),
 }).passthrough();

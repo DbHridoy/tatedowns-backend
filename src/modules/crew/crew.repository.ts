@@ -52,7 +52,7 @@ export class CrewRepository {
       crew: crewId,
       startDate: { $lte: date },
       endDate: { $gte: date },
-      status: { $in: ["Not Started", "In Progress", "Delayed"] },
+      status: { $in: ["Scheduled and Open"] },
     })
       .populate("job", "customJobId title status")
       .populate("client", "clientName address city state zipCode");

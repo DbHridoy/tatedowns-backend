@@ -18,7 +18,7 @@ export interface ProductionScheduleDocument extends Document {
   durationDays: number;
   estimatedLaborHours: number;
   laborCapacityPerDay: number;
-  status: "Not Started" | "In Progress" | "Delayed" | "Completed";
+  status: "Scheduled and Open" | "Pending Close";
   scheduleSegments?: any[];
   displayOrder?: number;
   jobSiteLocation?: string;
@@ -54,8 +54,8 @@ const productionScheduleSchema = new Schema<ProductionScheduleDocument>(
     laborCapacityPerDay: { type: Number, default: 22, min: 1 },
     status: {
       type: String,
-      enum: ["Not Started", "In Progress", "Delayed", "Completed"],
-      default: "Not Started",
+      enum: ["Scheduled and Open", "Pending Close"],
+      default: "Scheduled and Open",
     },
     scheduleSegments: [{ type: Schema.Types.Mixed }],
     displayOrder: { type: Number, default: 0 },

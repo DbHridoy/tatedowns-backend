@@ -10,7 +10,7 @@ import {
 const crewRoute = Router();
 
 crewRoute.use(authMiddleware.authenticate);
-crewRoute.use(authMiddleware.authorize(["Admin", "Production Manager"]));
+crewRoute.use(authMiddleware.authorize(["Production Manager"]));
 
 crewRoute.post("/", validate(CreateCrewSchema), crewController.createCrew);
 crewRoute.get("/", crewController.getCrews);

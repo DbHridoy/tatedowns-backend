@@ -14,35 +14,35 @@ productionCalendarRoute.use(authMiddleware.authenticate);
 
 productionCalendarRoute.get(
   "/",
-  authMiddleware.authorize(["Admin", "Production Manager"]),
+  authMiddleware.authorize(["Production Manager"]),
   productionCalendarController.getCalendar
 );
 productionCalendarRoute.get(
   "/available-jobs",
-  authMiddleware.authorize(["Admin", "Production Manager"]),
+  authMiddleware.authorize(["Production Manager"]),
   productionCalendarController.getAvailableJobs
 );
 productionCalendarRoute.post(
   "/schedule",
-  authMiddleware.authorize(["Admin", "Production Manager"]),
+  authMiddleware.authorize(["Production Manager"]),
   validate(ScheduleJobSchema),
   productionCalendarController.scheduleJob
 );
 productionCalendarRoute.patch(
   "/:id",
-  authMiddleware.authorize(["Admin", "Production Manager"]),
+  authMiddleware.authorize(["Production Manager"]),
   validate(UpdateScheduleSchema),
   productionCalendarController.updateSchedule
 );
 productionCalendarRoute.patch(
   "/:id/status",
-  authMiddleware.authorize(["Admin", "Production Manager", "Painter"]),
+  authMiddleware.authorize(["Production Manager"]),
   validate(UpdateScheduleStatusSchema),
   productionCalendarController.updateScheduleStatus
 );
 productionCalendarRoute.post(
   "/:id/rain-delay",
-  authMiddleware.authorize(["Admin", "Production Manager"]),
+  authMiddleware.authorize(["Production Manager"]),
   validate(RainDelaySchema),
   productionCalendarController.applyRainDelay
 );

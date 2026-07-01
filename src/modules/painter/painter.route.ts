@@ -20,23 +20,23 @@ painterRoute.get(
 
 painterRoute.get(
   "/",
-  authMiddleware.authorize(["Admin", "Production Manager"]),
+  authMiddleware.authorize(["Production Manager"]),
   painterController.getPainters
 );
 painterRoute.post(
   "/",
-  authMiddleware.authorize(["Admin", "Production Manager"]),
+  authMiddleware.authorize(["Production Manager"]),
   validate(CreatePainterSchema),
   painterController.createPainter
 );
 painterRoute.get(
   "/:id",
-  authMiddleware.authorize(["Admin", "Production Manager"]),
+  authMiddleware.authorize(["Production Manager"]),
   painterController.getPainterById
 );
 painterRoute.patch(
   "/:id",
-  authMiddleware.authorize(["Admin", "Production Manager"]),
+  authMiddleware.authorize(["Production Manager"]),
   validate(UpdatePainterSchema),
   painterController.updatePainter
 );

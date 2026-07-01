@@ -10,7 +10,7 @@ const parseCalendarDate = (value: string | Date) => {
   const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match) {
     const [, year, month, day] = match;
-    return new Date(Number(year), Number(month) - 1, Number(day));
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
   }
 
   return new Date(String(value));

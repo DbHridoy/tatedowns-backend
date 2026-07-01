@@ -8,9 +8,17 @@ import { Crew } from "../crew/crew.model";
 import { ProductionCalendarRepository } from "./production-calendar.repository";
 import { createNotification, createNotificationsForUsers } from "../../utils/create-notification-utils";
 
+const TERMINAL_SCHEDULE_STATUSES = new Set(["Pending Close", "Completed"]);
+const ACTIVE_SCHEDULE_STATUSES = new Set([
+  "Scheduled and Open",
+  "Not Started",
+  "In Progress",
+  "Delayed",
+]);
+
 const addDays = (date: Date, days: number) => {
   const next = new Date(date);
-  next.setDate(next.getDate() + days);
+  next.setUTCDate(next.getUTCDate() + days);
   return next;
 };
 
@@ -22,13 +30,100 @@ const parseCalendarDate = (value: string | Date) => {
   const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match) {
     const [, year, month, day] = match;
-    return new Date(Number(year), Number(month) - 1, Number(day));
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
   }
 
   return new Date(String(value));
 };
 
-const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const startOfDay = (date: Date) =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+const endOfDay = (date: Date) =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+
+const normalizeScheduleSegments = (item: any) => {
+  const segments = Array.isArray(item?.scheduleSegments) && item.scheduleSegments.length
+    ? item.scheduleSegments
+    : [{ startDate: item.startDate, endDate: item.endDate }];
+
+  return segments
+    .map((segment: any) => ({
+      startDate: startOfDay(new Date(segment.startDate)),
+      endDate: endOfDay(new Date(segment.endDate)),
+    }))
+    .sort(
+      (
+        left: { startDate: Date; endDate: Date },
+        right: { startDate: Date; endDate: Date }
+      ) => left.startDate.getTime() - right.startDate.getTime()
+    );
+};
+
+const summarizeScheduleSegments = (segments: Array<{ startDate: Date; endDate: Date }>) => {
+  if (!segments.length) {
+    return null;
+  }
+
+  const totalWorkingDays = segments.reduce((total, segment) => {
+    const diff = segment.endDate.getTime() - segment.startDate.getTime();
+    return total + Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+  }, 0);
+
+  return {
+    startDate: segments[0].startDate,
+    endDate: segments[segments.length - 1].endDate,
+    durationDays: totalWorkingDays,
+  };
+};
+
+const shiftSegmentsFromDate = (
+  item: any,
+  threshold: Date,
+  delayDays: number
+) => {
+  const segments = normalizeScheduleSegments(item);
+  const shiftedSegments: Array<{ startDate: Date; endDate: Date }> = [];
+
+  for (const segment of segments) {
+    if (segment.endDate < threshold) {
+      shiftedSegments.push(segment);
+      continue;
+    }
+
+    if (segment.startDate >= threshold) {
+      shiftedSegments.push({
+        startDate: addDays(segment.startDate, delayDays),
+        endDate: addDays(segment.endDate, delayDays),
+      });
+      continue;
+    }
+
+    const preservedEnd = addDays(threshold, -1);
+    if (segment.startDate <= preservedEnd) {
+      shiftedSegments.push({
+        startDate: segment.startDate,
+        endDate: preservedEnd,
+      });
+    }
+
+    shiftedSegments.push({
+      startDate: addDays(threshold, delayDays),
+      endDate: addDays(segment.endDate, delayDays),
+    });
+  }
+
+  const summary = summarizeScheduleSegments(shiftedSegments);
+  if (!summary) {
+    return null;
+  }
+
+  return {
+    scheduleSegments: shiftedSegments,
+    startDate: summary.startDate,
+    endDate: summary.endDate,
+    durationDays: summary.durationDays,
+  };
+};
 
 export class ProductionCalendarService {
   constructor(private readonly productionCalendarRepository: ProductionCalendarRepository) {}
@@ -49,9 +144,7 @@ export class ProductionCalendarService {
 
   private sanitizePainterSchedule = (item: any) => {
     const base = item.toObject ? item.toObject() : item;
-    const canPainterUpdateStatus = ["Not Started", "In Progress", "Delayed"].includes(
-      base.status
-    );
+    const canPainterUpdateStatus = base.status === "Scheduled and Open";
     return {
       _id: base._id,
       startDate: base.startDate,
@@ -60,6 +153,7 @@ export class ProductionCalendarService {
       estimatedLaborHours: base.estimatedLaborHours,
       laborCapacityPerDay: base.laborCapacityPerDay,
       status: base.status,
+      scheduleSegments: base.scheduleSegments || [],
       displayOrder: base.displayOrder,
       jobSiteLocation: base.jobSiteLocation,
       rainDelayHistory: base.rainDelayHistory || [],
@@ -122,7 +216,7 @@ export class ProductionCalendarService {
     const scheduledItems = await this.productionCalendarRepository.getCalendarItems({});
     const scheduledJobIds = new Set(
       scheduledItems
-        .filter((item: any) => item.status !== "Completed")
+        .filter((item: any) => !TERMINAL_SCHEDULE_STATUSES.has(item.status))
         .map((item: any) => item.job?._id?.toString?.() || item.job?.toString?.())
         .filter(Boolean)
     );
@@ -171,7 +265,7 @@ export class ProductionCalendarService {
     const existingSchedules = await this.productionCalendarRepository.findSchedulesByJob(
       String(job._id)
     );
-    if (existingSchedules.some((item: any) => item.status !== "Completed")) {
+    if (existingSchedules.some((item: any) => !TERMINAL_SCHEDULE_STATUSES.has(item.status))) {
       throw new apiError(Errors.BadRequest.code, "Job already has an active schedule");
     }
 
@@ -198,7 +292,8 @@ export class ProductionCalendarService {
       durationDays,
       estimatedLaborHours,
       laborCapacityPerDay,
-      status: "Not Started",
+      status: "Scheduled and Open",
+      scheduleSegments: [{ startDate, endDate }],
       displayOrder: payload.displayOrder || 0,
       jobSiteLocation: this.buildSiteLocation(job.clientId),
       notes: payload.notes,
@@ -206,9 +301,11 @@ export class ProductionCalendarService {
       updatedBy: user.userId,
     });
 
-    if (job.status !== "Scheduled and Open") {
-      await Job.findByIdAndUpdate(job._id, { status: "Scheduled and Open" });
-    }
+    await Job.findByIdAndUpdate(job._id, {
+      status: "Scheduled and Open",
+      productionManagerId: user.userId,
+      startDate,
+    });
 
     const painterIds = this.getPainterIdsForCrew(crew);
     if (painterIds.length) {
@@ -266,9 +363,9 @@ export class ProductionCalendarService {
         crewId: crew._id,
         crewName: crew.name,
         scheduledDays: crewItems.reduce((sum: number, item: any) => sum + Number(item.durationDays || 0), 0),
-        activeJobs: crewItems.filter((item: any) => ["Not Started", "In Progress"].includes(item.status)).length,
-        completedJobs: crewItems.filter((item: any) => item.status === "Completed").length,
-        delayedJobs: crewItems.filter((item: any) => item.status === "Delayed").length,
+        activeJobs: crewItems.filter((item: any) => ACTIVE_SCHEDULE_STATUSES.has(item.status)).length,
+        completedJobs: crewItems.filter((item: any) => TERMINAL_SCHEDULE_STATUSES.has(item.status)).length,
+        delayedJobs: crewItems.filter((item: any) => (item.rainDelayHistory || []).length > 0).length,
       };
     });
 
@@ -279,8 +376,8 @@ export class ProductionCalendarService {
       utilization,
       stats: {
         totalScheduled: items.length,
-        delayedJobs: items.filter((item: any) => item.status === "Delayed").length,
-        completedJobs: items.filter((item: any) => item.status === "Completed").length,
+        delayedJobs: items.filter((item: any) => (item.rainDelayHistory || []).length > 0).length,
+        completedJobs: items.filter((item: any) => TERMINAL_SCHEDULE_STATUSES.has(item.status)).length,
       },
     };
   };
@@ -305,6 +402,12 @@ export class ProductionCalendarService {
       nextPayload.endDate = payload.endDate
         ? startOfDay(parseCalendarDate(String(payload.endDate)))
         : addDays(startDate, durationDays - 1);
+      nextPayload.scheduleSegments = [
+        {
+          startDate: nextPayload.startDate,
+          endDate: nextPayload.endDate,
+        },
+      ];
     }
     return this.productionCalendarRepository.updateScheduleItem(id, nextPayload);
   };
@@ -323,7 +426,7 @@ export class ProductionCalendarService {
       if (!crew) {
         throw new apiError(Errors.Forbidden.code, Errors.Forbidden.message);
       }
-      if (!["In Progress", "Completed"].includes(status)) {
+      if (status !== "Pending Close") {
         throw new apiError(Errors.Forbidden.code, "Painter cannot set this status");
       }
     }
@@ -377,14 +480,13 @@ export class ProductionCalendarService {
       const update: any = { updatedBy: user.userId };
 
       if (isTarget) {
-        if (threshold <= startDate) {
-          update.startDate = addDays(startDate, delayDays);
-          update.endDate = addDays(endDate, delayDays);
-        } else {
-          update.endDate = addDays(endDate, delayDays);
-          update.durationDays = Number(item.durationDays || 0) + delayDays;
+        const shifted = shiftSegmentsFromDate(item, threshold, delayDays);
+        if (shifted) {
+          update.startDate = shifted.startDate;
+          update.endDate = shifted.endDate;
+          update.durationDays = shifted.durationDays;
+          update.scheduleSegments = shifted.scheduleSegments;
         }
-        update.status = "Delayed";
         update.rainDelayHistory = [
           ...(item.rainDelayHistory || []),
           {
@@ -395,9 +497,14 @@ export class ProductionCalendarService {
             affectedFromDate: threshold,
           },
         ];
-      } else if (startDate >= threshold) {
-        update.startDate = addDays(startDate, delayDays);
-        update.endDate = addDays(endDate, delayDays);
+      } else if (endDate >= threshold) {
+        const shifted = shiftSegmentsFromDate(item, threshold, delayDays);
+        if (shifted) {
+          update.startDate = shifted.startDate;
+          update.endDate = shifted.endDate;
+          update.durationDays = shifted.durationDays;
+          update.scheduleSegments = shifted.scheduleSegments;
+        }
       } else {
         continue;
       }
