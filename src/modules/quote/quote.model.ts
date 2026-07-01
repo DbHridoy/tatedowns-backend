@@ -22,7 +22,7 @@ const quoteSchema = new Schema(
 
     bookedOnSpot: {
       type: Boolean,
-      default: false,
+      required: true,
     },
 
     status: {
@@ -32,6 +32,7 @@ const quoteSchema = new Schema(
     },
     bidSheetUrl: {
       type: String,
+      required: true,
       trim: true,
     },
   },

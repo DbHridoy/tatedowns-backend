@@ -38,7 +38,7 @@ export class QuoteController {
   };
 
   getQuoteById = async (req: Request, res: Response, next: NextFunction) => {
-    const { quoteId } = req.params;
+    const quoteId = String(req.params.quoteId);
     const quote = await this.quoteService.getQuoteById(quoteId);
     res.status(HttpCodes.Ok).json({
       success: true,
@@ -48,20 +48,22 @@ export class QuoteController {
   };
 
   updateQuoteById = async (req: Request, res: Response, next: NextFunction) => {
-    const { quoteId } = req.params;
+    const quoteId = String(req.params.quoteId);
     const { body } = req;
     const bidSheetUrl = req.file?.fileUrl;
+    const user = req.user!;
     logger.info({ body }, "QuoteController.updateQuoteById");
     const quote = await this.quoteService.updateQuoteById(
       quoteId,
       body,
-      bidSheetUrl
+      bidSheetUrl,
+      user
     );
     res.status(HttpCodes.Ok).json({ quote });
   };
 
   deleteQuoteById = async (req: Request, res: Response, next: NextFunction) => {
-    const { quoteId } = req.params;
+    const quoteId = String(req.params.quoteId);
     const quote = await this.quoteService.deleteQuoteById(quoteId);
     res.status(HttpCodes.Ok).json({ quote });
   };

@@ -8,12 +8,11 @@ export interface JobDocument extends Document {
   clientId: Types.ObjectId;
   quoteId: Types.ObjectId;
   productionManagerId: Types.ObjectId;
-  contractUrl?: string;
+  contractUrl: string;
   title: string;
   price: number;
   downPayment: number;
   budgetSpent: number;
-  downPaymentStatus: "Approved" | "Rejected" | "Pending";
   totalHours: number;
   setupCleanup: number;
   powerwash: number;
@@ -22,6 +21,9 @@ export interface JobDocument extends Document {
   estimatedGallons: number;
   startDate: Date;
   status:
+  | "Downpayment Pending"
+  | "DC Pending"
+  | "DC Awaiting Approval"
   | "Ready to Schedule"
   | "Scheduled and Open"
   | "Pending Close"
@@ -38,34 +40,32 @@ const jobSchema = new Schema<JobDocument>(
     clientId: { type: Types.ObjectId, ref: "Client", required: true },
     quoteId: { type: Types.ObjectId, ref: "Quote", required: true },
     productionManagerId: { type: Types.ObjectId, ref: "User" },
-    contractUrl: { type: String, trim: true },
+    contractUrl: { type: String, trim: true, required: true },
     customJobId: { type: String, unique: true },
     title: { type: String, required: true },
     price: { type: Number, required: true },
     downPayment: { type: Number, required: true },
     budgetSpent: { type: Number, default: 0 },
-    downPaymentStatus: {
-      type: String,
-      enum: ["Approved", "Rejected", "Pending"],
-      default: "Pending",
-    },
-    totalHours: { type: Number, default: 0 },
-    setupCleanup: { type: Number, default: 0 },
-    powerwash: { type: Number, default: 0 },
-    laborHours: { type: Number, default: 0 },
+    totalHours: { type: Number, required: true },
+    setupCleanup: { type: Number, required: true },
+    powerwash: { type: Number, required: true },
+    laborHours: { type: Number, required: true },
     estimatedStartDate: { type: Date, required: true },
-    estimatedGallons: { type: Number, default: 0 },
+    estimatedGallons: { type: Number, required: true },
     startDate: { type: Date },
     status: {
       type: String,
       enum: [
+        "Downpayment Pending",
+        "DC Pending",
+        "DC Awaiting Approval",
         "Ready to Schedule",
         "Scheduled and Open",
         "Pending Close",
         "Closed",
         "Cancelled",
       ],
-      default: "Ready to Schedule",
+      default: "Downpayment Pending",
     },
   },
   {

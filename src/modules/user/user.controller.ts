@@ -46,7 +46,7 @@ export class UserController {
 
   getUserById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { id } = req.params;
+      const id = String(req.params.id);
       const user = await this.userService.getUserById(id);
       res.status(HttpCodes.Ok).json({
         success: true,
@@ -68,7 +68,7 @@ export class UserController {
 
   deleteUser = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { id } = req.params;
+      const id = String(req.params.id);
       const user = await this.userService.deleteUser(id);
       res.status(HttpCodes.Ok).json({
         success: true,
@@ -95,7 +95,7 @@ export class UserController {
 
   updateUser = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { id } = req.params
+      const id = String(req.params.id)
       const body = req.body
       const user = await this.userService.updateUser(id, body)
       res.status(HttpCodes.Ok).json({

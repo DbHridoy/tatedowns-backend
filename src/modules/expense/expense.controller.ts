@@ -69,7 +69,7 @@ export class ExpenseController {
 
   getMileageById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const mileageId = req.params.mileageId;
+      const mileageId = String(req.params.mileageId);
       const mileage = await this.expenseService.getMileageById(mileageId);
       return res.status(200).json({
         success: true,
@@ -96,7 +96,7 @@ export class ExpenseController {
   updateMileage = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
       const updatedMileage = await this.expenseService.updateMileage(
-        req.params.mileageId,
+        String(req.params.mileageId),
         req.body
       );
       return res.status(200).json({

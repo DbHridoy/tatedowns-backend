@@ -4,6 +4,7 @@ export interface DesignConsultationDocument extends Document {
   clientId: Types.ObjectId;
   jobId: Types.ObjectId;
   contractUrl?: string;
+  status: "Pending" | "Approved";
 
   // Product details
   product?: string;
@@ -35,6 +36,11 @@ const DesignConsultationSchema = new Schema<DesignConsultationDocument>(
       ref: "Job",
       required: true,
       index: true,
+    },
+    status: {
+      type: String,
+      enum: ["Pending", "Approved"],
+      default: "Pending",
     },
     contractUrl: { type: String, trim: true },
 

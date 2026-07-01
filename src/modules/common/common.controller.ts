@@ -106,7 +106,7 @@ export class CommonController {
   updateNotificationRead = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
       const user = req.user!;
-      const { notificationId } = req.params;
+      const notificationId = String(req.params.notificationId);
       const updatedNotification = await this.commonService.markNotificationRead(
         notificationId,
         user.userId
@@ -199,7 +199,7 @@ export class CommonController {
 
   getUserStatsById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { userId } = req.params;
+      const userId = String(req.params.userId);
       const { error, periodType, date } = getPeriodParams(req.query);
       if (error) {
         return res.status(400).json({ message: error });
@@ -218,7 +218,7 @@ export class CommonController {
   );
   getSalesRepStats = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { salesRepId } = req.params;
+      const salesRepId = String(req.params.salesRepId);
       const { error, periodType, date } = getPeriodParams(req.query);
       if (error) {
         return res.status(400).json({ message: error });
@@ -238,7 +238,7 @@ export class CommonController {
 
   getSalesRepPeriodStats = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { userId } = req.params;
+      const userId = String(req.params.userId);
       const { periodType = "month", date } = req.query;
 
       const normalizedPeriod = String(periodType).toLowerCase();
@@ -303,7 +303,7 @@ export class CommonController {
 
   deletePayment = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { paymentId } = req.params;
+      const paymentId = String(req.params.paymentId);
       const payment = await this.commonService.deleteSalesRepPayment(paymentId);
       res.status(200).json({
         success: true,
@@ -315,7 +315,7 @@ export class CommonController {
 
   updatePayment = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { paymentId } = req.params;
+      const paymentId = String(req.params.paymentId);
       const payment = await this.commonService.updateSalesRepPayment(
         paymentId,
         req.body

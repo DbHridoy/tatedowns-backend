@@ -6,6 +6,12 @@ const normalizeQueryValue = (value: any) => {
   return value;
 };
 
+const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildCaseInsensitiveExactRegex = (value: string) =>
+  new RegExp(`^${escapeRegex(value)}$`, "i");
+
 const buildFilterFromQuery = (queryParams: any = {}) => {
   const filter: any = {};
 
@@ -71,6 +77,26 @@ export function buildDynamicSearch(model: any, queryParams: any = {}) {
 
   // --- Filters
   Object.assign(filter, buildFilterFromQuery(queryParams));
+  Object.keys(filter).forEach((key) => {
+    const isStringField = model?.schema?.paths?.[key]?.instance === "String";
+    if (!isStringField) return;
+
+    const value = filter[key];
+    if (typeof value === "string") {
+      filter[key] = buildCaseInsensitiveExactRegex(value);
+      return;
+    }
+
+    if (value && typeof value === "object" && Array.isArray(value.$in)) {
+      filter[key] = {
+        $in: value.$in.map((entry: any) =>
+          typeof entry === "string"
+            ? buildCaseInsensitiveExactRegex(entry)
+            : entry
+        ),
+      };
+    }
+  });
 
   // --- Sorting
   Object.assign(options, buildSortOptions(queryParams));
@@ -117,8 +143,18 @@ export function applyDynamicSearchToArray<T extends Record<string, any>>(
       const itemValue = normalizeComparable(item[key]);
       if (rule && typeof rule === "object" && "$in" in rule) {
         return (rule.$in as any[]).some(
-          (val) => normalizeComparable(val) === itemValue
+          (val) => {
+            if (val instanceof RegExp) return val.test(String(itemValue ?? ""));
+            if (typeof val === "string" && typeof itemValue === "string") {
+              return val.toLowerCase() === itemValue.toLowerCase();
+            }
+            return normalizeComparable(val) === itemValue;
+          }
         );
+      }
+      if (rule instanceof RegExp) return rule.test(String(itemValue ?? ""));
+      if (typeof rule === "string" && typeof itemValue === "string") {
+        return rule.toLowerCase() === itemValue.toLowerCase();
       }
       return normalizeComparable(rule) === itemValue;
     });

@@ -1,6 +1,9 @@
 import { ExpenseRepository } from "./expense.repository";
 import { CommonService } from "../common/common.service";
-import { createNotification } from "../../utils/create-notification-utils";
+import {
+  createNotification,
+  createNotificationsForRole,
+} from "../../utils/create-notification-utils";
 
 export class ExpenseService {
   constructor(
@@ -14,10 +17,15 @@ export class ExpenseService {
       throw new Error("Mileage rate not set");
     }
     const deduction = variable?.mileageRate * mileageInfo.totalMilesDriven;
-    return await this.expenseRepository.createNewMileage({
+    const newMileage = await this.expenseRepository.createNewMileage({
       ...mileageInfo,
       deduction,
     });
+    await createNotificationsForRole("Admin", {
+      type: "mileage_submitted",
+      message: "A mileage log was submitted for review",
+    });
+    return newMileage;
   };
 
   getAllMileage = async (query: any) => {
@@ -44,19 +52,24 @@ export class ExpenseService {
       mileageId,
       mileageInfo
     );
-    const previousStatus = existingMileage?.data?.status;
-    const nextStatus = updatedMileage?.status;
-    if (
-      nextStatus === "Approved" &&
-      previousStatus !== "Approved" &&
-      updatedMileage?.salesRepId
-    ) {
+    const previousStatus = existingMileage?.data?.status?.toString();
+    const nextStatus = updatedMileage?.status?.toString();
+    const salesRepId = updatedMileage?.salesRepId?.toString();
+
+    if (salesRepId && previousStatus !== nextStatus) {
+      const type =
+        nextStatus === "Approved"
+          ? "mileage_approved"
+          : nextStatus === "Rejected"
+            ? "mileage_rejected"
+            : "mileage_status_updated";
       await createNotification({
-        forUser: updatedMileage.salesRepId.toString(),
-        type: "mileage_approved",
-        message: "Your mileage log has been approved",
+        forUser: salesRepId,
+        type,
+        message: `Your mileage log status changed from ${previousStatus || "N/A"} to ${nextStatus || "N/A"}`,
       });
     }
+
     return updatedMileage;
   };
 

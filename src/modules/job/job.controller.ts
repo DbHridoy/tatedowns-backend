@@ -5,6 +5,11 @@ import { HttpCodes } from "../../constants/status-codes";
 import { logger } from "../../utils/logger";
 import { Job } from "./job.model";
 import { DesignConsultation } from "./design-consultation.model";
+import {
+  createAdminNotificationForJobStatus,
+  createNotification,
+  createNotificationsForRole,
+} from "../../utils/create-notification-utils";
 
 export class JobController {
   constructor(private readonly jobService: JobService) { }
@@ -15,6 +20,9 @@ export class JobController {
         const jobInfo = req.body;
         const user = req.user!;
         const contractUrl = req.file?.fileUrl;
+        if (!contractUrl) {
+          throw new Error("Job contract is required");
+        }
 
         const newJob = await this.jobService.createJob(
           jobInfo,
@@ -45,6 +53,7 @@ export class JobController {
       upsellValue,
       addedHours,
       estimatedStartDate,
+      status,
     } = req.body;
     const job = await Job.findById(jobId);
     if (!job) {
@@ -65,9 +74,16 @@ export class JobController {
       upsellDescription,
       upsellValue,
       estimatedStartDate,
+      status,
     };
     if (addedHours !== undefined) {
       updatePayload.addedHours = normalizeNumber(addedHours);
+      const baseTotalHours = Number(job.totalHours || 0);
+      const basePowerwash = Number(job.powerwash || 0);
+      const baseSetupCleanup = Number(job.setupCleanup || 0);
+      const nextLaborHours =
+        baseTotalHours - basePowerwash - baseSetupCleanup + updatePayload.addedHours;
+      await Job.findByIdAndUpdate(jobId, { laborHours: nextLaborHours });
     }
     if (estimatedGallons !== undefined) {
       updatePayload.estimatedGallons = normalizeNumber(estimatedGallons);
@@ -77,6 +93,7 @@ export class JobController {
     }
     if (req.file?.fileUrl) {
       updatePayload.contractUrl = req.file.fileUrl;
+      await Job.findByIdAndUpdate(jobId, { contractUrl: req.file.fileUrl });
     }
 
     const designConsultation = await DesignConsultation.findOneAndUpdate(
@@ -84,6 +101,36 @@ export class JobController {
       updatePayload,
       { new: true, upsert: true }
     );
+    const nextJobStatus =
+      designConsultation?.status === "Approved"
+        ? "Ready to Schedule"
+        : "DC Awaiting Approval";
+    if (job.status !== nextJobStatus) {
+      await Job.findByIdAndUpdate(jobId, { status: nextJobStatus });
+      if (job.salesRepId) {
+        await createNotification({
+          forUser: job.salesRepId.toString(),
+          type: "job_status_updated",
+          message: `Job status changed from ${job.status || "N/A"} to ${nextJobStatus}`,
+        });
+      }
+      if (job.productionManagerId) {
+        await createNotification({
+          forUser: job.productionManagerId.toString(),
+          type: "job_status_updated",
+          message: `Job status changed from ${job.status || "N/A"} to ${nextJobStatus}`,
+        });
+      }
+      if (nextJobStatus === "DC Awaiting Approval") {
+        await createAdminNotificationForJobStatus(nextJobStatus);
+      }
+      if (nextJobStatus === "Ready to Schedule") {
+        await createNotificationsForRole("Production Manager", {
+          type: "job_status_ready_to_schedule",
+          message: "A job is ready to schedule",
+        });
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -113,6 +160,7 @@ export class JobController {
         upsellValue,
         addedHours,
         estimatedStartDate,
+        status,
       } = req.body;
 
       const normalizeNumber = (value: unknown) => {
@@ -127,10 +175,17 @@ export class JobController {
         colorCode,
         upsellDescription,
         estimatedStartDate,
+        status,
       };
 
       if (addedHours !== undefined) {
         updatePayload.addedHours = normalizeNumber(addedHours);
+        const baseTotalHours = Number(job.totalHours || 0);
+        const basePowerwash = Number(job.powerwash || 0);
+        const baseSetupCleanup = Number(job.setupCleanup || 0);
+        const nextLaborHours =
+          baseTotalHours - basePowerwash - baseSetupCleanup + updatePayload.addedHours;
+        await Job.findByIdAndUpdate(job._id, { laborHours: nextLaborHours });
       }
       if (estimatedGallons !== undefined) {
         updatePayload.estimatedGallons = normalizeNumber(estimatedGallons);
@@ -140,6 +195,7 @@ export class JobController {
       }
       if (req.file?.fileUrl) {
         updatePayload.contractUrl = req.file.fileUrl;
+        await Job.findByIdAndUpdate(job._id, { contractUrl: req.file.fileUrl });
       }
 
       const designConsultation = await DesignConsultation.findByIdAndUpdate(
@@ -147,6 +203,37 @@ export class JobController {
         updatePayload,
         { new: true }
       );
+      const nextDcStatus = status ?? existingDesignConsultation.status ?? "Pending";
+      const nextJobStatus =
+        nextDcStatus === "Approved"
+          ? "Ready to Schedule"
+          : "DC Awaiting Approval";
+      if (job.status !== nextJobStatus) {
+        await Job.findByIdAndUpdate(job._id, { status: nextJobStatus });
+        if (job.salesRepId) {
+          await createNotification({
+            forUser: job.salesRepId.toString(),
+            type: "job_status_updated",
+            message: `Job status changed from ${job.status || "N/A"} to ${nextJobStatus}`,
+          });
+        }
+        if (job.productionManagerId) {
+          await createNotification({
+            forUser: job.productionManagerId.toString(),
+            type: "job_status_updated",
+            message: `Job status changed from ${job.status || "N/A"} to ${nextJobStatus}`,
+          });
+        }
+        if (nextJobStatus === "DC Awaiting Approval") {
+          await createAdminNotificationForJobStatus(nextJobStatus);
+        }
+        if (nextJobStatus === "Ready to Schedule") {
+          await createNotificationsForRole("Production Manager", {
+            type: "job_status_ready_to_schedule",
+            message: "A job is ready to schedule",
+          });
+        }
+      }
 
       res.status(200).json({
         success: true,
@@ -187,7 +274,7 @@ export class JobController {
 
   getJobById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const jobId = req.params.jobId;
+      const jobId = String(req.params.jobId);
       // logger.info({ jobId }, "JobController.getJobById");
       const job = await this.jobService.getJobById(jobId);
       res.status(HttpCodes.Ok).json({
@@ -215,7 +302,7 @@ export class JobController {
 
   getDesignConsultationById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { id } = req.params;
+      const id = String(req.params.id);
       const designConsultation =
         await this.jobService.getDesignConsultationById(id);
       res.status(HttpCodes.Ok).json({
@@ -258,7 +345,7 @@ export class JobController {
 
   getAllJobBySalesRepId = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const { salesRepId } = req.params;
+      const salesRepId = String(req.params.salesRepId);
       const jobs = await this.jobService.getAllJobBySalesRepId(
         salesRepId,
         req.query
@@ -282,7 +369,7 @@ export class JobController {
 
   updateJobById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const jobId = req.params.jobId;
+      const jobId = String(req.params.jobId);
       const jobInfo = req.body;
       logger.info(jobInfo, "JobController.updateJobById line 39");
       const user = req.user!;
@@ -297,7 +384,7 @@ export class JobController {
 
   assignSalesRep = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const salesRepId = req.body.salesRepId
-    const jobId = req.params.jobId
+    const jobId = String(req.params.jobId)
     const updatedJob = await this.jobService.assignSalesRep(salesRepId, jobId)
     res.status(HttpCodes.Ok).json({
       success: true,
@@ -308,25 +395,12 @@ export class JobController {
 
   deleteJobById = asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
-      const jobId = req.params.jobId;
+      const jobId = String(req.params.jobId);
       const job = await this.jobService.deleteJobById(jobId);
       res.status(HttpCodes.Ok).json({
         success: true,
         message: "Job deleted successfully",
         data: job,
-      });
-    }
-  );
-
-  updateDownpaymentStatus = asyncHandler(
-    async (req: Request, res: Response, next: NextFunction) => {
-      const { id, status } = req.body;
-      logger.info({ id, status }, "JobController.updateDownpaymentStatus");
-      const result = await this.jobService.updateDownpaymentStatus(id, status);
-      res.status(HttpCodes.Ok).json({
-        success: true,
-        message: "Downpayment status updated successfully",
-        data: result,
       });
     }
   );

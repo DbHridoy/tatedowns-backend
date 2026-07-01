@@ -41,10 +41,41 @@ export const createNotificationsForUsers = async (
 };
 
 export const createNotificationsForRole = async (
-  role: "Admin" | "Sales Rep" | "Production Manager",
+  role: "Admin" | "Sales Rep" | "Production Manager" | "Painter",
   input: Omit<CreateNotificationsForUsersInput, "userIds">
 ) => {
   const users = await User.find({ role }).select("_id");
   const userIds = users.map((user) => user._id.toString());
   return createNotificationsForUsers({ ...input, userIds });
+};
+
+type AdminTrackedJobStatus =
+  | "Downpayment Pending"
+  | "DC Pending"
+  | "DC Awaiting Approval"
+  | "Pending Close";
+
+export const createAdminNotificationForJobStatus = async (
+  status: AdminTrackedJobStatus
+) => {
+  const payloadByStatus: Record<AdminTrackedJobStatus, { type: string; message: string }> = {
+    "Downpayment Pending": {
+      type: "downpayment_status_updated",
+      message: "A job is pending downpayment",
+    },
+    "DC Pending": {
+      type: "job_status_dc_pending",
+      message: "A job is pending design consultation",
+    },
+    "DC Awaiting Approval": {
+      type: "job_status_dc_pending",
+      message: "A job is pending design consultation",
+    },
+    "Pending Close": {
+      type: "job_status_pending_close",
+      message: "A job was marked as Pending Close",
+    },
+  };
+
+  return createNotificationsForRole("Admin", payloadByStatus[status]);
 };

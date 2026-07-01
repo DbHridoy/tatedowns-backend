@@ -8,10 +8,43 @@ import Payment from "./payment.model";
 import ClientNote from "../client/client-note.model";
 
 export class JobRepository {
+  private castObjectIdFilters = (match: Record<string, any>) => {
+    const objectIdFields = [
+      "salesRepId",
+      "clientId",
+      "quoteId",
+      "productionManagerId",
+      "_id",
+    ];
+    const casted = { ...match };
+
+    for (const field of objectIdFields) {
+      const value = casted[field];
+      if (typeof value === "string" && Types.ObjectId.isValid(value)) {
+        casted[field] = new Types.ObjectId(value);
+      } else if (value && typeof value === "object" && Array.isArray(value.$in)) {
+        casted[field] = {
+          ...value,
+          $in: value.$in.map((item: any) =>
+            typeof item === "string" && Types.ObjectId.isValid(item)
+              ? new Types.ObjectId(item)
+              : item
+          ),
+        };
+      }
+    }
+
+    return casted;
+  };
+
   createJob = async (jobInfo: any) => {
     logger.info({ jobInfo }, "JobRepository.createNewJob");
     const newJob = new Job(jobInfo);
     return await newJob.save();
+  };
+
+  countJobsByClientId = async (clientId: string) => {
+    return Job.countDocuments({ clientId });
   };
 
   createJobNote = async (jobNote: any) => {
@@ -21,9 +54,61 @@ export class JobRepository {
   };
 
   getAllJobs = async (query: any) => {
-    const { filter, search, options } = buildDynamicSearch(Job, query);
+    const normalizedQuery =
+      query?.pmId && !query?.productionManagerId
+        ? { ...query, productionManagerId: query.pmId }
+        : query;
+    const { filter, search, options } = buildDynamicSearch(Job, normalizedQuery);
+    const { sort, ...queryOptions } = options;
+    const hasStartDateSort =
+      sort && Object.prototype.hasOwnProperty.call(sort, "startDate");
+
+    if (hasStartDateSort) {
+      const startDateDirection = sort.startDate;
+      const match = this.castObjectIdFilters({ ...filter, ...search });
+
+      const [jobs, total] = await Promise.all([
+        Job.aggregate([
+          { $match: match },
+          {
+            $addFields: {
+              __sortDate: { $ifNull: ["$startDate", "$estimatedStartDate"] },
+              __missingSortDate: {
+                $cond: [{ $eq: [{ $ifNull: ["$startDate", "$estimatedStartDate"] }, null] }, 1, 0],
+              },
+            },
+          },
+          {
+            $sort: {
+              __missingSortDate: 1,
+              __sortDate: startDateDirection,
+              createdAt: -1,
+            },
+          },
+          { $skip: queryOptions.skip || 0 },
+          ...(queryOptions.limit ? [{ $limit: queryOptions.limit }] : []),
+        ]),
+        Job.countDocuments(match),
+      ]);
+
+      const populatedJobs = await Job.populate(jobs, [
+        { path: "clientId" },
+        { path: "salesRepId" },
+        { path: "quoteId" },
+        {
+          path: "notes",
+          populate: { path: "createdBy" },
+        },
+        { path: "designConsultation" },
+        { path: "productionManagerId" },
+      ]);
+
+      return { jobs: populatedJobs, total };
+    }
+
     const [jobs, total] = await Promise.all([
-      Job.find({ ...filter, ...search }, null, options)
+      Job.find({ ...filter, ...search }, null, queryOptions)
+        .sort(sort)
         .populate("clientId salesRepId quoteId")
         .populate({
           path: "notes",
@@ -89,7 +174,7 @@ export class JobRepository {
     const finalFilter = {
       ...filter,
       ...search,
-      downPaymentStatus: "Pending",
+      status: "Downpayment Pending",
     };
 
     const [downpaymentRequest, total] = await Promise.all([
@@ -196,16 +281,6 @@ export class JobRepository {
       totalEstimatedPrice: result.totalEstimatedPrice[0]?.sum || 0,
     };
   };
-
-  updateDownpaymentStatus = async (id: string, status: string) => {
-    return await Job.findByIdAndUpdate(
-      id,
-      { downPaymentStatus: status },
-      { new: true }
-    );
-  };
-
-
 
   getAllPaymentBySalesRepId = async (id: string, query: any) => {
     const { filter, search, options } = buildDynamicSearch(Payment, query);

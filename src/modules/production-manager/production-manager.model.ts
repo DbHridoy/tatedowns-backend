@@ -1,11 +1,14 @@
 import { Schema, Types, model } from "mongoose";
 
-const productionManagerSchema = new Schema({
+const productionManagerSchema = new Schema(
+  {
     userId: {
-        type: Types.ObjectId,
-        ref: "User"
+      type: Types.ObjectId,
+      ref: "User",
     },
-});
+  },
+  { timestamps: true }
+);
 
 const ProductionManager = model("ProductionManager", productionManagerSchema);
 

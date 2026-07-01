@@ -16,7 +16,7 @@ interface UploadOptions {
 
 export const uploadFile = ({
     fieldName,
-    maxSizeMB = 5,
+    maxSizeMB = 50,
     uploadType = "single",
     maxCount = 10,
     folder = "uploads",
@@ -47,11 +47,14 @@ export const uploadFile = ({
             if (err) return next(err);
 
             try {
+                const buildObjectKey = (originalname: string) => {
+                    const ext = path.extname(originalname);
+                    return `${folder}/${crypto.randomUUID()}${ext}`;
+                };
+
                 /** SINGLE FILE */
                 if (req.file) {
-                    // const ext = path.extname(req.file.originalname);
-                    // const key = `${folder}/${crypto.randomUUID()}${ext}`;
-                    const key = `${folder}/${req.file.originalname}`;
+                    const key = buildObjectKey(req.file.originalname);
 
                     const fileUrl = await uploadToS3(
                         req.file.buffer,
@@ -65,9 +68,7 @@ export const uploadFile = ({
                 /** MULTIPLE FILES (array) */
                 if (Array.isArray(req.files)) {
                     for (const file of req.files) {
-                        // const ext = path.extname(file.originalname);
-                        // const key = `${folder}/${crypto.randomUUID()}${ext}`;
-                        const key = `${folder}/${file.originalname}`;
+                        const key = buildObjectKey(file.originalname);
 
                         file.fileUrl = await uploadToS3(
                             file.buffer,
@@ -81,9 +82,7 @@ export const uploadFile = ({
                 if (req.files && !Array.isArray(req.files)) {
                     for (const fileArray of Object.values(req.files)) {
                         for (const file of fileArray as any[]) {
-                            // const ext = path.extname(file.originalname);
-                            // const key = `${folder}/${crypto.randomUUID()}${ext}`;
-                            const key = `${folder}/${file.originalname}`;
+                            const key = buildObjectKey(file.originalname);
 
                             file.fileUrl = await uploadToS3(
                                 file.buffer,

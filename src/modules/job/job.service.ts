@@ -6,6 +6,7 @@ import { QuoteRepository } from "../quote/quote.repository";
 import { logger } from "../../utils/logger";
 import { ClientRepository } from "../client/client.repository";
 import {
+  createAdminNotificationForJobStatus,
   createNotification,
   createNotificationsForRole,
 } from "../../utils/create-notification-utils";
@@ -63,6 +64,40 @@ export class JobService {
     };
   };
 
+  private notifyJobStatusChange = async (
+    previousStatus: string | undefined,
+    nextStatus: string | undefined,
+    job: any
+  ) => {
+    if (!nextStatus || previousStatus === nextStatus) {
+      return;
+    }
+    const salesRepUserId = this.normalizeObjectId(job?.salesRepId);
+    const productionManagerId = this.normalizeObjectId(job?.productionManagerId);
+    const type =
+      previousStatus === "Downpayment Pending" || nextStatus === "Downpayment Pending"
+        ? "downpayment_status_updated"
+        : "job_status_updated";
+    const message = `Job status changed from ${previousStatus || "N/A"} to ${nextStatus}`;
+
+    if (salesRepUserId) {
+      await createNotification({
+        forUser: salesRepUserId,
+        type,
+        message,
+      });
+    }
+
+    if (productionManagerId) {
+      await createNotification({
+        forUser: productionManagerId,
+        type: "job_status_updated",
+        message,
+      });
+    }
+
+  };
+
   createJob = async (jobInfo: any, contractUrl: string | undefined, user: any) => {
     const salesRep = await this.salesRepRepo.findByUserId(user.userId);
     if (!salesRep) {
@@ -85,14 +120,12 @@ export class JobService {
     const job = {
       ...jobInfo,
       ...(contractUrl ? { contractUrl } : {}),
-      salesRepId: user.userId
+      salesRepId: user.userId,
+      status: "Downpayment Pending",
     };
     const newJob = await this.jobRepository.createJob(job);
     await this.salesRepRepo.incrementSalesRepStats("job", user.userId);
-    await createNotificationsForRole("Admin", {
-      type: "quote_converted_job",
-      message: "A quote was converted into a job",
-    });
+    await createAdminNotificationForJobStatus("Downpayment Pending");
     return newJob;
   };
 
@@ -106,10 +139,6 @@ export class JobService {
       createdBy: user.userId,
     };
     const newNote = await this.jobRepository.createJobNote(jobNoteData);
-    await createNotificationsForRole("Admin", {
-      type: "note_added",
-      message: "A note was added to a job",
-    });
     if (jobNoteData.jobId) {
       const job = await this.jobRepository.getJobById(jobNoteData.jobId);
       const productionManagerId = this.normalizeObjectId(
@@ -175,6 +204,8 @@ export class JobService {
     if (!job) {
       throw new Error("Job not found");
     }
+    const previousStatus = job.status?.toString();
+    const requestedStatus = jobInfo?.status?.toString();
     const previousProductionManagerId = this.normalizeObjectId(
       job.productionManagerId
     );
@@ -203,10 +234,6 @@ export class JobService {
         throw new Error("Production manager is required");
       }
       const updatedJob = await this.jobRepository.updateJobById(id, jobInfo);
-      await createNotificationsForRole("Admin", {
-        type: "job_status_scheduled_open",
-        message: "A job was marked as Scheduled and Open",
-      });
       if (!notifiedProductionManagerChange) {
         const productionManagerId = this.normalizeObjectId(
           jobInfo.productionManagerId
@@ -217,14 +244,34 @@ export class JobService {
           message: "A new job has been assigned to you",
         });
       }
+      await this.notifyJobStatusChange(
+        previousStatus,
+        updatedJob?.status?.toString(),
+        updatedJob || job
+      );
+      return updatedJob;
+    }
+    if (status === "Ready to Schedule") {
+      const updatedJob = await this.jobRepository.updateJobById(id, jobInfo);
+      await createNotificationsForRole("Production Manager", {
+        type: "job_status_ready_to_schedule",
+        message: "A job is ready to schedule",
+      });
+      await this.notifyJobStatusChange(
+        previousStatus,
+        updatedJob?.status?.toString(),
+        updatedJob || job
+      );
       return updatedJob;
     }
     if (status === "Pending Close") {
       const updatedJob = await this.jobRepository.updateJobById(id, jobInfo);
-      await createNotificationsForRole("Admin", {
-        type: "job_status_pending_close",
-        message: "A job was marked as Pending Close",
-      });
+      await createAdminNotificationForJobStatus("Pending Close");
+      await this.notifyJobStatusChange(
+        previousStatus,
+        updatedJob?.status?.toString(),
+        updatedJob || job
+      );
       return updatedJob;
     }
     if (status === "Closed" && job) {
@@ -246,36 +293,53 @@ export class JobService {
           message: "A job assigned to you was marked as Closed",
         });
       }
+      await this.notifyJobStatusChange(
+        previousStatus,
+        updatedJob?.status?.toString(),
+        updatedJob || job
+      );
       return updatedJob;
     }
 
     const updatedJob = await this.jobRepository.updateJobById(id, jobInfo);
+    const nextStatus = requestedStatus || updatedJob?.status?.toString();
+    if (
+      nextStatus === "Downpayment Pending" ||
+      nextStatus === "DC Pending" ||
+      nextStatus === "DC Awaiting Approval"
+    ) {
+      await createAdminNotificationForJobStatus(nextStatus);
+    }
+    await this.notifyJobStatusChange(
+      previousStatus,
+      nextStatus,
+      updatedJob || job
+    );
     return updatedJob;
   };
   
   assignSalesRep = async (jobId: string, salesRepId: string) => {
-    return await this.jobRepository.assignSalesRep(jobId, salesRepId)
-  }
+    const existingJob = await this.jobRepository.getJobById(jobId);
+    const updatedJob = await this.jobRepository.assignSalesRep(jobId, salesRepId);
+    const previousSalesRepId = this.normalizeObjectId(existingJob?.salesRepId);
+    const nextSalesRepId = this.normalizeObjectId(updatedJob?.salesRepId);
 
-  updateDownpaymentStatus = async (id: string, status: string) => {
-    const existingJob = await this.jobRepository.getJobById(id);
-    const updatedJob = await this.jobRepository.updateDownpaymentStatus(
-      id,
-      status
-    );
-    if (
-      status === "Approved" &&
-      existingJob?.downPaymentStatus !== "Approved" &&
-      existingJob?.salesRepId
-    ) {
+    if (previousSalesRepId && previousSalesRepId !== nextSalesRepId) {
       await createNotification({
-        forUser: existingJob.salesRepId.toString(),
-        type: "downpayment_approved",
-        message: "Your downpayment request has been approved",
+        forUser: previousSalesRepId,
+        type: "job_unassigned",
+        message: "You have been unassigned from a job",
+      });
+    }
+    if (nextSalesRepId && previousSalesRepId !== nextSalesRepId) {
+      await createNotification({
+        forUser: nextSalesRepId,
+        type: "job_assigned_sales_rep",
+        message: "A job has been assigned to you",
       });
     }
     return updatedJob;
-  };
+  }
 
   deleteJobById = async (id: string) => {
     return await this.jobRepository.deleteJobById(id);
