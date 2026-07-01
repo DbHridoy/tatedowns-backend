@@ -125,6 +125,14 @@ const shiftSegmentsFromDate = (
   };
 };
 
+const isDateWithinScheduleSegments = (item: any, targetDate: Date) => {
+  const segments = normalizeScheduleSegments(item);
+  return segments.some(
+    (segment: { startDate: Date; endDate: Date }) =>
+      targetDate >= segment.startDate && targetDate <= segment.endDate
+  );
+};
+
 export class ProductionCalendarService {
   constructor(private readonly productionCalendarRepository: ProductionCalendarRepository) {}
 
@@ -168,6 +176,7 @@ export class ProductionCalendarService {
               ? base.crew.painters.map((painter: any) => ({
                   _id: painter._id,
                   fullName: painter.fullName,
+                  role: painter.role,
                 }))
               : [],
           }
@@ -186,6 +195,7 @@ export class ProductionCalendarService {
             clientName: base.client.clientName,
           }
         : null,
+      painterDailyHours: base.painterDailyHours || [],
     };
   };
 
@@ -409,6 +419,73 @@ export class ProductionCalendarService {
         },
       ];
     }
+
+    if (Array.isArray(payload.painterHours)) {
+      if (!payload.workDate) {
+        throw new apiError(Errors.BadRequest.code, "workDate is required for painter hours");
+      }
+
+      const workDate = startOfDay(parseCalendarDate(String(payload.workDate)));
+      if (!isDateWithinScheduleSegments(schedule, workDate)) {
+        throw new apiError(
+          Errors.BadRequest.code,
+          "Painter hours can only be recorded on scheduled work dates"
+        );
+      }
+
+      const crewId = String((schedule.crew as any)?._id || schedule.crew);
+      const crew = await Crew.findById(crewId).populate("painters", "_id fullName role");
+      if (!crew) {
+        throw new apiError(Errors.NotFound.code, "Crew not found");
+      }
+
+      const validPainterIds = new Set(
+        (crew.painters || []).map((painter: any) => String(painter._id || painter))
+      );
+      const seenPainterIds = new Set<string>();
+
+      const normalizedPainterHours = payload.painterHours.map((entry: any) => {
+        const painterId = String(entry.painterId);
+        if (!validPainterIds.has(painterId)) {
+          throw new apiError(
+            Errors.BadRequest.code,
+            "Painter hours can only be recorded for painters assigned to this crew"
+          );
+        }
+        if (seenPainterIds.has(painterId)) {
+          throw new apiError(Errors.BadRequest.code, "Duplicate painter hours entry provided");
+        }
+        seenPainterIds.add(painterId);
+
+        return {
+          painter: painterId,
+          hours: Number(entry.hours) || 0,
+        };
+      });
+
+      const existingDailyHours = Array.isArray((schedule as any).painterDailyHours)
+        ? (schedule as any).painterDailyHours.map((entry: any) => ({
+            workDate: startOfDay(new Date(entry.workDate)),
+            painterHours: Array.isArray(entry.painterHours) ? entry.painterHours : [],
+          }))
+        : [];
+
+      const nextDailyHours = existingDailyHours.filter(
+        (entry: any) => entry.workDate.getTime() !== workDate.getTime()
+      );
+      nextDailyHours.push({
+        workDate,
+        painterHours: normalizedPainterHours,
+      });
+      nextDailyHours.sort(
+        (left: any, right: any) => left.workDate.getTime() - right.workDate.getTime()
+      );
+
+      nextPayload.painterDailyHours = nextDailyHours;
+      delete nextPayload.painterHours;
+      delete nextPayload.workDate;
+    }
+
     return this.productionCalendarRepository.updateScheduleItem(id, nextPayload);
   };
 

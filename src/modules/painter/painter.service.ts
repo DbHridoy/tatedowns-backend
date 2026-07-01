@@ -5,6 +5,7 @@ import User from "../user/user.model";
 import { Crew } from "../crew/crew.model";
 import { ProductionCalendarService } from "../production-calendar/production-calendar.service";
 import { HashUtils } from "../../utils/hash-utils";
+import { ProductionSchedule } from "../production-calendar/production-schedule.model";
 
 export class PainterService {
   constructor(
@@ -13,7 +14,12 @@ export class PainterService {
     private readonly hashUtils: HashUtils
   ) {}
 
-  private sanitizePainter = (user: any, crew?: any) => {
+  private sanitizePainter = (
+    user: any,
+    crew?: any,
+    totalWorkedHours = 0,
+    dailyWorkedHours: Array<{ workDate: string; hours: number }> = []
+  ) => {
     if (!user) {
       return null;
     }
@@ -26,6 +32,8 @@ export class PainterService {
       profileImage: user.profileImage,
       role: user.role,
       isActive: user.isActive ?? true,
+      totalWorkedHours,
+      dailyWorkedHours,
       crew: crew
         ? {
             _id: crew._id,
@@ -60,8 +68,71 @@ export class PainterService {
         crewByPainter.set(String(painterId), crew);
       });
     });
+
+    const painterIds = users.map((user) => user._id);
+    const workedHoursTotals = await ProductionSchedule.aggregate([
+      { $unwind: { path: "$painterDailyHours", preserveNullAndEmptyArrays: false } },
+      { $unwind: { path: "$painterDailyHours.painterHours", preserveNullAndEmptyArrays: false } },
+      {
+        $match: {
+          "painterDailyHours.painterHours.painter": { $in: painterIds },
+        },
+      },
+      {
+        $group: {
+          _id: "$painterDailyHours.painterHours.painter",
+          totalWorkedHours: { $sum: "$painterDailyHours.painterHours.hours" },
+        },
+      },
+    ]);
+    const totalHoursByPainter = new Map<string, number>();
+    workedHoursTotals.forEach((entry: any) => {
+      totalHoursByPainter.set(String(entry._id), Number(entry.totalWorkedHours) || 0);
+    });
+
+    const workedHoursByDate = await ProductionSchedule.aggregate([
+      { $unwind: { path: "$painterDailyHours", preserveNullAndEmptyArrays: false } },
+      { $unwind: { path: "$painterDailyHours.painterHours", preserveNullAndEmptyArrays: false } },
+      {
+        $match: {
+          "painterDailyHours.painterHours.painter": { $in: painterIds },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            painter: "$painterDailyHours.painterHours.painter",
+            workDate: "$painterDailyHours.workDate",
+          },
+          hours: { $sum: "$painterDailyHours.painterHours.hours" },
+        },
+      },
+      {
+        $sort: {
+          "_id.workDate": 1,
+        },
+      },
+    ]);
+    const dailyHoursByPainter = new Map<string, Array<{ workDate: string; hours: number }>>();
+    workedHoursByDate.forEach((entry: any) => {
+      const painterId = String(entry._id.painter);
+      const current = dailyHoursByPainter.get(painterId) || [];
+      current.push({
+        workDate: new Date(entry._id.workDate).toISOString().slice(0, 10),
+        hours: Number(entry.hours) || 0,
+      });
+      dailyHoursByPainter.set(painterId, current);
+    });
+
     return {
-      data: users.map((user: any) => this.sanitizePainter(user, crewByPainter.get(String(user._id)))),
+      data: users.map((user: any) =>
+        this.sanitizePainter(
+          user,
+          crewByPainter.get(String(user._id)),
+          totalHoursByPainter.get(String(user._id)) || 0,
+          dailyHoursByPainter.get(String(user._id)) || []
+        )
+      ),
       total: users.length,
     };
   };

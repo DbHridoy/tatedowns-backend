@@ -24,19 +24,31 @@ export class ProductionCalendarRepository {
 
   getScheduleById = async (id: string) => {
     return ProductionSchedule.findById(id)
-      .populate("crew", "customCrewId name status painters")
+      .populate({
+        path: "crew",
+        select: "customCrewId name status painters",
+        populate: { path: "painters", select: "fullName email role profileImage isActive" },
+      })
       .populate("job", "customJobId title status totalHours laborHours setupCleanup powerwash price")
       .populate("client", "clientName address city state zipCode")
       .populate("quote", "estimatedPrice status")
+      .populate("painterHours.painter", "fullName email role")
+      .populate("painterDailyHours.painterHours.painter", "fullName email role")
       .populate("createdBy updatedBy", "fullName email role");
   };
 
   updateScheduleItem = async (id: string, payload: any) => {
     return ProductionSchedule.findByIdAndUpdate(id, payload, { new: true })
-      .populate("crew", "customCrewId name status painters")
+      .populate({
+        path: "crew",
+        select: "customCrewId name status painters",
+        populate: { path: "painters", select: "fullName email role profileImage isActive" },
+      })
       .populate("job", "customJobId title status totalHours laborHours setupCleanup powerwash price")
       .populate("client", "clientName address city state zipCode")
       .populate("quote", "estimatedPrice status")
+      .populate("painterHours.painter", "fullName email role")
+      .populate("painterDailyHours.painterHours.painter", "fullName email role")
       .populate("createdBy updatedBy", "fullName email role");
   };
 
@@ -75,10 +87,15 @@ export class ProductionCalendarRepository {
 
     const items = await ProductionSchedule.find(finalFilter)
       .sort({ startDate: 1, displayOrder: 1, createdAt: 1 })
-      .populate("crew", "customCrewId name status painters")
+      .populate({
+        path: "crew",
+        select: "customCrewId name status painters",
+        populate: { path: "painters", select: "fullName email role profileImage isActive" },
+      })
       .populate("job", "customJobId title status totalHours laborHours setupCleanup powerwash price")
       .populate("client", "clientName address city state zipCode")
-      .populate("quote", "estimatedPrice status");
+      .populate("quote", "estimatedPrice status")
+      .populate("painterDailyHours.painterHours.painter", "fullName email role");
 
     if (!search?.$or?.length) {
       return items;

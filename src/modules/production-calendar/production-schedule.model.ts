@@ -8,6 +8,16 @@ export interface RainDelayHistory {
   affectedFromDate: Date;
 }
 
+export interface PainterHoursEntry {
+  painter: Types.ObjectId;
+  hours: number;
+}
+
+export interface PainterDailyHoursEntry {
+  workDate: Date;
+  painterHours: PainterHoursEntry[];
+}
+
 export interface ProductionScheduleDocument extends Document {
   job: Types.ObjectId;
   client: Types.ObjectId;
@@ -23,6 +33,8 @@ export interface ProductionScheduleDocument extends Document {
   displayOrder?: number;
   jobSiteLocation?: string;
   notes?: string;
+  painterHours?: PainterHoursEntry[];
+  painterDailyHours?: PainterDailyHoursEntry[];
   rainDelayHistory: RainDelayHistory[];
   createdBy?: Types.ObjectId;
   updatedBy?: Types.ObjectId;
@@ -37,6 +49,22 @@ const rainDelayHistorySchema = new Schema<RainDelayHistory>(
     appliedAt: { type: Date, required: true },
     appliedBy: { type: Types.ObjectId, ref: "User", required: true },
     affectedFromDate: { type: Date, required: true },
+  },
+  { _id: false }
+);
+
+const painterHoursSchema = new Schema<PainterHoursEntry>(
+  {
+    painter: { type: Types.ObjectId, ref: "User", required: true },
+    hours: { type: Number, required: true, min: 0 },
+  },
+  { _id: false }
+);
+
+const painterDailyHoursSchema = new Schema<PainterDailyHoursEntry>(
+  {
+    workDate: { type: Date, required: true },
+    painterHours: { type: [painterHoursSchema], default: [] },
   },
   { _id: false }
 );
@@ -61,6 +89,8 @@ const productionScheduleSchema = new Schema<ProductionScheduleDocument>(
     displayOrder: { type: Number, default: 0 },
     jobSiteLocation: { type: String, trim: true },
     notes: { type: String, trim: true },
+    painterHours: { type: [painterHoursSchema], default: [] },
+    painterDailyHours: { type: [painterDailyHoursSchema], default: [] },
     rainDelayHistory: { type: [rainDelayHistorySchema], default: [] },
     createdBy: { type: Types.ObjectId, ref: "User" },
     updatedBy: { type: Types.ObjectId, ref: "User" },

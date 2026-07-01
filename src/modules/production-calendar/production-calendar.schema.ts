@@ -4,6 +4,10 @@ const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ObjectId");
 const dateStringSchema = z.string().refine((value: string) => !Number.isNaN(new Date(value).getTime()), {
   message: "Invalid date",
 });
+const painterHoursEntrySchema = z.object({
+  painterId: objectIdSchema,
+  hours: z.coerce.number().min(0),
+});
 
 export const ScheduleJobSchema = z.object({
   jobId: objectIdSchema,
@@ -19,11 +23,13 @@ export const UpdateScheduleSchema = z.object({
   crewId: objectIdSchema.optional(),
   startDate: dateStringSchema.optional(),
   endDate: dateStringSchema.optional(),
+  workDate: dateStringSchema.optional(),
   durationDays: z.coerce.number().int().positive().optional(),
   laborCapacityPerDay: z.coerce.number().positive().optional(),
   status: z.enum(["Scheduled and Open", "Pending Close"]).optional(),
   notes: z.string().trim().optional(),
   displayOrder: z.coerce.number().int().nonnegative().optional(),
+  painterHours: z.array(painterHoursEntrySchema).optional(),
 });
 
 export const UpdateScheduleStatusSchema = z.object({
