@@ -8,12 +8,15 @@ import {
 import { SalesRepRepository } from "../sales-rep/sales-rep.repository";
 import { CommonService } from "../common/common.service";
 import { Job } from "../job/job.model";
+import { Mailer } from "../../utils/mailer-utils";
+import { logger } from "../../utils/logger";
 
 export class ClientService {
   constructor(
     private clientRepo: ClientRepository,
     private salesRepRepo: SalesRepRepository,
-    private commonService: CommonService
+    private commonService: CommonService,
+    private mailer: Mailer
   ) { }
 
   createClient = async ({
@@ -71,6 +74,27 @@ export class ClientService {
           newClient._id
           }`,
       });
+    }
+
+    const isWebsiteCreatedClient = !user?.userId;
+    if (isWebsiteCreatedClient) {
+      this.mailer
+        .sendWebsiteClientCreatedAlert({
+          clientName: newClient.clientName,
+          phoneNumber: newClient.phoneNumber,
+          email: newClient.email || undefined,
+          address: newClient.address,
+          city: newClient.city,
+          state: newClient.state,
+          zipCode: newClient.zipCode,
+          leadSource: newClient.leadSource || undefined,
+        })
+        .catch((error) => {
+          logger.error(
+            { error, clientId: newClient._id },
+            "Failed to send website client admin email"
+          );
+        });
     }
 
     return newClient;

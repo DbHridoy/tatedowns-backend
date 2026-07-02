@@ -88,7 +88,7 @@ export const expenseService = new ExpenseService(
   expenseRepository,
   commonService
 );
-export const clientService = new ClientService(clientRepo, salesRepRepo, commonService);
+export const clientService = new ClientService(clientRepo, salesRepRepo, commonService, mailer);
 export const clientController = new ClientController(clientService);
 export const expenseController = new ExpenseController(expenseService);
 export const quoteController = new QuoteController(quoteService);
