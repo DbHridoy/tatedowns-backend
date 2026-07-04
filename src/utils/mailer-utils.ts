@@ -50,7 +50,7 @@ export class Mailer {
     } = payload;
 
     await transporter.sendMail({
-      from: `"Developer" <${env.GMAIL_USER}>`,
+      from: `"TTMPainting" <${env.GMAIL_USER}>`,
       to: env.ADMIN_EMAIL,
       subject: `New website client: ${clientName}`,
       html: `
