@@ -64,7 +64,7 @@ export class Mailer {
           <tr><td><b>City</b></td><td>${city}</td></tr>
           <tr><td><b>State</b></td><td>${state}</td></tr>
           <tr><td><b>Zip Code</b></td><td>${zipCode}</td></tr>
-          <tr><td><b>Lead Source</b></td><td>${leadSource || "-"}</td></tr>
+          <tr><td><b>Lead Source</b></td><td>${leadSource || "TTMPainting Website"}</td></tr>
         </table>
       `,
     });
