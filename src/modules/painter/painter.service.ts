@@ -55,21 +55,14 @@ export class PainterService {
     return this.sanitizePainter(user);
   };
 
-  getPainters = async (query: any) => {
-    const users = await User.find({ role: "Painter", ...("isActive" in query ? { isActive: query.isActive === "true" } : {}) })
-      .select("-password")
-      .sort({ createdAt: -1 });
-    const crews = await Crew.find({ painters: { $in: users.map((user) => user._id) } }).select(
-      "customCrewId name status painters"
-    );
-    const crewByPainter = new Map<string, any>();
-    crews.forEach((crew: any) => {
-      crew.painters.forEach((painterId: any) => {
-        crewByPainter.set(String(painterId), crew);
-      });
-    });
+  private getWorkedHoursSummary = async (painterIds: any[]) => {
+    if (!painterIds.length) {
+      return {
+        totalHoursByPainter: new Map<string, number>(),
+        dailyHoursByPainter: new Map<string, Array<{ workDate: string; hours: number }>>(),
+      };
+    }
 
-    const painterIds = users.map((user) => user._id);
     const workedHoursTotals = await ProductionSchedule.aggregate([
       { $unwind: { path: "$painterDailyHours", preserveNullAndEmptyArrays: false } },
       { $unwind: { path: "$painterDailyHours.painterHours", preserveNullAndEmptyArrays: false } },
@@ -85,6 +78,7 @@ export class PainterService {
         },
       },
     ]);
+
     const totalHoursByPainter = new Map<string, number>();
     workedHoursTotals.forEach((entry: any) => {
       totalHoursByPainter.set(String(entry._id), Number(entry.totalWorkedHours) || 0);
@@ -113,6 +107,7 @@ export class PainterService {
         },
       },
     ]);
+
     const dailyHoursByPainter = new Map<string, Array<{ workDate: string; hours: number }>>();
     workedHoursByDate.forEach((entry: any) => {
       const painterId = String(entry._id.painter);
@@ -123,6 +118,30 @@ export class PainterService {
       });
       dailyHoursByPainter.set(painterId, current);
     });
+
+    return {
+      totalHoursByPainter,
+      dailyHoursByPainter,
+    };
+  };
+
+  getPainters = async (query: any) => {
+    const users = await User.find({ role: "Painter", ...("isActive" in query ? { isActive: query.isActive === "true" } : {}) })
+      .select("-password")
+      .sort({ createdAt: -1 });
+    const crews = await Crew.find({ painters: { $in: users.map((user) => user._id) } }).select(
+      "customCrewId name status painters"
+    );
+    const crewByPainter = new Map<string, any>();
+    crews.forEach((crew: any) => {
+      crew.painters.forEach((painterId: any) => {
+        crewByPainter.set(String(painterId), crew);
+      });
+    });
+
+    const painterIds = users.map((user) => user._id);
+    const { totalHoursByPainter, dailyHoursByPainter } =
+      await this.getWorkedHoursSummary(painterIds);
 
     return {
       data: users.map((user: any) =>
@@ -145,7 +164,15 @@ export class PainterService {
     const crew = await Crew.findOne({ painters: id, status: "Active" }).select(
       "customCrewId name status"
     );
-    return this.sanitizePainter(user, crew);
+    const { totalHoursByPainter, dailyHoursByPainter } = await this.getWorkedHoursSummary([
+      user._id,
+    ]);
+    return this.sanitizePainter(
+      user,
+      crew,
+      totalHoursByPainter.get(String(user._id)) || 0,
+      dailyHoursByPainter.get(String(user._id)) || []
+    );
   };
 
   updatePainter = async (id: string, payload: any) => {
