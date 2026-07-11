@@ -7,6 +7,7 @@ import { Quote } from "../quote/quote.model";
 import { Crew } from "../crew/crew.model";
 import { ProductionCalendarRepository } from "./production-calendar.repository";
 import { createNotification, createNotificationsForUsers } from "../../utils/create-notification-utils";
+import { buildJobCostSummary } from "../../utils/job-cost-utils";
 
 const TERMINAL_SCHEDULE_STATUSES = new Set(["Pending Close", "Completed"]);
 const ACTIVE_SCHEDULE_STATUSES = new Set([
@@ -147,7 +148,14 @@ export class ProductionCalendarService {
 
   private sanitizeManagementSchedule = (item: any) => {
     const base = item.toObject ? item.toObject() : item;
-    return base;
+    return {
+      ...base,
+      costSummary: buildJobCostSummary({
+        jobPrice: Number(base?.job?.price || 0),
+        painterDailyHours: base?.painterDailyHours || [],
+        materialExpenses: base?.materialExpenses || [],
+      }),
+    };
   };
 
   private sanitizePainterSchedule = (item: any) => {
@@ -195,7 +203,23 @@ export class ProductionCalendarService {
             clientName: base.client.clientName,
           }
         : null,
-      painterDailyHours: base.painterDailyHours || [],
+      painterDailyHours: Array.isArray(base.painterDailyHours)
+        ? base.painterDailyHours.map((entry: any) => ({
+            workDate: entry?.workDate,
+            painterHours: Array.isArray(entry?.painterHours)
+              ? entry.painterHours.map((painterEntry: any) => ({
+                  painter: painterEntry?.painter
+                    ? {
+                        _id: painterEntry.painter._id,
+                        fullName: painterEntry.painter.fullName,
+                        role: painterEntry.painter.role,
+                      }
+                    : null,
+                  hours: Number(painterEntry?.hours) || 0,
+                }))
+              : [],
+          }))
+        : [],
     };
   };
 
@@ -211,13 +235,14 @@ export class ProductionCalendarService {
       status: base.status,
       painters: Array.isArray(base.painters)
         ? base.painters.map((painter: any) => ({
-            _id: painter._id,
-            fullName: painter.fullName,
-            email: painter.email,
-            role: painter.role,
-            profileImage: painter.profileImage,
-            isActive: painter.isActive,
-          }))
+                  _id: painter._id,
+                  fullName: painter.fullName,
+                  email: painter.email,
+                  role: painter.role,
+                  hourlyRate: Number(painter.hourlyRate || 0),
+                  profileImage: painter.profileImage,
+                  isActive: painter.isActive,
+                }))
         : [],
     };
   };
@@ -486,7 +511,22 @@ export class ProductionCalendarService {
       delete nextPayload.workDate;
     }
 
-    return this.productionCalendarRepository.updateScheduleItem(id, nextPayload);
+    if (Array.isArray(payload.materialExpenses)) {
+      nextPayload.materialExpenses = payload.materialExpenses.map((entry: any) => ({
+        description: String(entry.description || "").trim(),
+        amount: Number(entry.amount) || 0,
+        expenseDate: startOfDay(parseCalendarDate(String(entry.expenseDate))),
+        note: entry.note ? String(entry.note).trim() : undefined,
+      }));
+    }
+
+    const updated = await this.productionCalendarRepository.updateScheduleItem(id, nextPayload);
+    if (!updated) {
+      return updated;
+    }
+
+    const refreshed = await this.productionCalendarRepository.getScheduleById(id);
+    return refreshed ? this.sanitizeManagementSchedule(refreshed) : refreshed;
   };
 
   updateScheduleStatus = async (id: string, status: string, user: any) => {
@@ -528,7 +568,18 @@ export class ProductionCalendarService {
       }
     }
 
-    return updated;
+    if (!updated) {
+      return updated;
+    }
+
+    const refreshed = await this.productionCalendarRepository.getScheduleById(id);
+    if (!refreshed) {
+      return refreshed;
+    }
+
+    return user.role === "Painter"
+      ? this.sanitizePainterSchedule(refreshed)
+      : this.sanitizeManagementSchedule(refreshed);
   };
 
   applyRainDelay = async (scheduleItemId: string, payload: any, user: any) => {
@@ -599,7 +650,8 @@ export class ProductionCalendarService {
       });
     }
 
-    return this.productionCalendarRepository.getScheduleById(scheduleItemId);
+    const refreshed = await this.productionCalendarRepository.getScheduleById(scheduleItemId);
+    return refreshed ? this.sanitizeManagementSchedule(refreshed) : refreshed;
   };
 
   getPainterOwnCrew = async (userId: string) => {

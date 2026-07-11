@@ -27,6 +27,11 @@ const userSchema = new Schema(
     phoneNumber: {
       type: String,
     },
+    hourlyRate: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
     address: {
       type: String,
     },

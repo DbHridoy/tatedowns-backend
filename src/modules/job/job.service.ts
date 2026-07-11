@@ -5,11 +5,13 @@ import { SalesRepRepository } from "../sales-rep/sales-rep.repository";
 import { QuoteRepository } from "../quote/quote.repository";
 import { logger } from "../../utils/logger";
 import { ClientRepository } from "../client/client.repository";
+import { ProductionSchedule } from "../production-calendar/production-schedule.model";
 import {
   createAdminNotificationForJobStatus,
   createNotification,
   createNotificationsForRole,
 } from "../../utils/create-notification-utils";
+import { buildJobCostSummary } from "../../utils/job-cost-utils";
 
 export class JobService {
   constructor(
@@ -172,7 +174,33 @@ export class JobService {
 
   getJobById = async (id: string) => {
     const job = await this.jobRepository.getJobById(id);
-    return this.applyDesignConsultationAdjustments(job);
+    const adjustedJob = this.applyDesignConsultationAdjustments(job);
+    if (!adjustedJob) {
+      return adjustedJob;
+    }
+
+    const schedules = await ProductionSchedule.find({ job: id })
+      .sort({ startDate: 1, createdAt: 1 })
+      .populate("painterDailyHours.painterHours.painter", "fullName hourlyRate role")
+      .populate("crew", "customCrewId name")
+      .lean();
+
+    const aggregatedPainterDailyHours = schedules.flatMap(
+      (schedule: any) => schedule?.painterDailyHours || []
+    );
+    const aggregatedMaterialExpenses = schedules.flatMap(
+      (schedule: any) => schedule?.materialExpenses || []
+    );
+
+    return {
+      ...adjustedJob,
+      productionSchedules: schedules,
+      costSummary: buildJobCostSummary({
+        jobPrice: Number(adjustedJob?.price || 0),
+        painterDailyHours: aggregatedPainterDailyHours,
+        materialExpenses: aggregatedMaterialExpenses,
+      }),
+    };
   };
 
   getAllDesignConsultation = async (query: any) => {

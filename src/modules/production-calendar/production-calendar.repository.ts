@@ -27,13 +27,16 @@ export class ProductionCalendarRepository {
       .populate({
         path: "crew",
         select: "customCrewId name status painters",
-        populate: { path: "painters", select: "fullName email role profileImage isActive" },
+        populate: {
+          path: "painters",
+          select: "fullName email role profileImage isActive hourlyRate",
+        },
       })
       .populate("job", "customJobId title status totalHours laborHours setupCleanup powerwash price")
       .populate("client", "clientName address city state zipCode")
       .populate("quote", "estimatedPrice status")
-      .populate("painterHours.painter", "fullName email role")
-      .populate("painterDailyHours.painterHours.painter", "fullName email role")
+      .populate("painterHours.painter", "fullName email role hourlyRate")
+      .populate("painterDailyHours.painterHours.painter", "fullName email role hourlyRate")
       .populate("createdBy updatedBy", "fullName email role");
   };
 
@@ -42,13 +45,16 @@ export class ProductionCalendarRepository {
       .populate({
         path: "crew",
         select: "customCrewId name status painters",
-        populate: { path: "painters", select: "fullName email role profileImage isActive" },
+        populate: {
+          path: "painters",
+          select: "fullName email role profileImage isActive hourlyRate",
+        },
       })
       .populate("job", "customJobId title status totalHours laborHours setupCleanup powerwash price")
       .populate("client", "clientName address city state zipCode")
       .populate("quote", "estimatedPrice status")
-      .populate("painterHours.painter", "fullName email role")
-      .populate("painterDailyHours.painterHours.painter", "fullName email role")
+      .populate("painterHours.painter", "fullName email role hourlyRate")
+      .populate("painterDailyHours.painterHours.painter", "fullName email role hourlyRate")
       .populate("createdBy updatedBy", "fullName email role");
   };
 
@@ -90,12 +96,15 @@ export class ProductionCalendarRepository {
       .populate({
         path: "crew",
         select: "customCrewId name status painters",
-        populate: { path: "painters", select: "fullName email role profileImage isActive" },
+        populate: {
+          path: "painters",
+          select: "fullName email role profileImage isActive hourlyRate",
+        },
       })
       .populate("job", "customJobId title status totalHours laborHours setupCleanup powerwash price")
       .populate("client", "clientName address city state zipCode")
       .populate("quote", "estimatedPrice status")
-      .populate("painterDailyHours.painterHours.painter", "fullName email role");
+      .populate("painterDailyHours.painterHours.painter", "fullName email role hourlyRate");
 
     if (!search?.$or?.length) {
       return items;

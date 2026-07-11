@@ -18,6 +18,13 @@ export interface PainterDailyHoursEntry {
   painterHours: PainterHoursEntry[];
 }
 
+export interface MaterialExpenseEntry {
+  description: string;
+  amount: number;
+  expenseDate: Date;
+  note?: string;
+}
+
 export interface ProductionScheduleDocument extends Document {
   job: Types.ObjectId;
   client: Types.ObjectId;
@@ -35,6 +42,7 @@ export interface ProductionScheduleDocument extends Document {
   notes?: string;
   painterHours?: PainterHoursEntry[];
   painterDailyHours?: PainterDailyHoursEntry[];
+  materialExpenses?: MaterialExpenseEntry[];
   rainDelayHistory: RainDelayHistory[];
   createdBy?: Types.ObjectId;
   updatedBy?: Types.ObjectId;
@@ -69,6 +77,16 @@ const painterDailyHoursSchema = new Schema<PainterDailyHoursEntry>(
   { _id: false }
 );
 
+const materialExpenseSchema = new Schema<MaterialExpenseEntry>(
+  {
+    description: { type: String, trim: true, required: true },
+    amount: { type: Number, required: true, min: 0 },
+    expenseDate: { type: Date, required: true },
+    note: { type: String, trim: true },
+  },
+  { _id: false }
+);
+
 const productionScheduleSchema = new Schema<ProductionScheduleDocument>(
   {
     job: { type: Types.ObjectId, ref: "Job", required: true, index: true },
@@ -91,6 +109,7 @@ const productionScheduleSchema = new Schema<ProductionScheduleDocument>(
     notes: { type: String, trim: true },
     painterHours: { type: [painterHoursSchema], default: [] },
     painterDailyHours: { type: [painterDailyHoursSchema], default: [] },
+    materialExpenses: { type: [materialExpenseSchema], default: [] },
     rainDelayHistory: { type: [rainDelayHistorySchema], default: [] },
     createdBy: { type: Types.ObjectId, ref: "User" },
     updatedBy: { type: Types.ObjectId, ref: "User" },

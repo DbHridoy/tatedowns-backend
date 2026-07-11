@@ -5,6 +5,7 @@ const UserSchema = z.object({
   fullName: z.string(),
   email: z.string().email(), // fixed
   phoneNumber: z.string(),
+  hourlyRate: z.coerce.number().min(0),
   address: z.string(),
   cluster: z.string(),
   role: z.enum(["Admin", "Sales Rep", "Production Manager", "Painter"]),
@@ -28,4 +29,5 @@ export const CreateUserSchema = UserSchema.omit({
 }).extend({
   cluster: z.string().optional(),
   isActive: z.boolean().optional(),
+  hourlyRate: z.coerce.number().min(0).optional(),
 });

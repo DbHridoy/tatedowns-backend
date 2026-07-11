@@ -28,6 +28,7 @@ export class PainterService {
       fullName: user.fullName,
       email: user.email,
       phoneNumber: user.phoneNumber,
+      hourlyRate: Number(user.hourlyRate || 0),
       address: user.address,
       profileImage: user.profileImage,
       role: user.role,

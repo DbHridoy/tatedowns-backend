@@ -8,6 +8,12 @@ const painterHoursEntrySchema = z.object({
   painterId: objectIdSchema,
   hours: z.coerce.number().min(0),
 });
+const materialExpenseEntrySchema = z.object({
+  description: z.string().trim().min(1),
+  amount: z.coerce.number().min(0),
+  expenseDate: dateStringSchema,
+  note: z.string().trim().optional(),
+});
 
 export const ScheduleJobSchema = z.object({
   jobId: objectIdSchema,
@@ -30,6 +36,7 @@ export const UpdateScheduleSchema = z.object({
   notes: z.string().trim().optional(),
   displayOrder: z.coerce.number().int().nonnegative().optional(),
   painterHours: z.array(painterHoursEntrySchema).optional(),
+  materialExpenses: z.array(materialExpenseEntrySchema).optional(),
 });
 
 export const UpdateScheduleStatusSchema = z.object({
