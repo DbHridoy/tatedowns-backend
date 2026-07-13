@@ -158,7 +158,11 @@ export class SalesRepRepository {
             {
               $group: {
                 _id: null,
-                totalJobs: { $sum: 1 },
+                totalJobs: {
+                  $sum: {
+                    $cond: [{ $ne: ["$status", "Cancelled"] }, 1, 0],
+                  },
+                },
                 totalRevenueSold: {
                   $sum: {
                     $cond: [

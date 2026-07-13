@@ -187,7 +187,7 @@ export class CommonRepository {
     ] = await Promise.all([
       Client.countDocuments({ ...dateFilter }),
       Quote.countDocuments({ ...dateFilter }),
-      Job.countDocuments({ ...dateFilter }),
+      Job.countDocuments({ status: { $ne: "Cancelled" }, ...dateFilter }),
       Job.countDocuments({ status: "Ready to Schedule", ...dateFilter }),
       Job.countDocuments({ status: "Scheduled and Open", ...dateFilter }),
       Job.countDocuments({ status: "Pending Close", ...dateFilter }),
@@ -255,7 +255,7 @@ export class CommonRepository {
     ] = await Promise.all([
       Client.countDocuments({ ...dateFilter }),
       Quote.countDocuments({ ...dateFilter }),
-      Job.countDocuments({ ...dateFilter }),
+      Job.countDocuments({ status: { $ne: "Cancelled" }, ...dateFilter }),
       Job.countDocuments({ status: "Scheduled and Open", ...dateFilter }),
       Job.countDocuments({ status: "Pending Close", ...dateFilter }),
       Job.countDocuments({ status: "Closed", ...dateFilter }),
@@ -321,6 +321,7 @@ export class CommonRepository {
       }),
       Job.countDocuments({
         salesRepId: salesRepObjectId,
+        status: { $ne: "Cancelled" },
         createdAt: { $gte: start, $lt: end },
       }),
       Job.aggregate([
@@ -423,7 +424,11 @@ export class CommonRepository {
     ] = await Promise.all([
       Client.countDocuments({ salesRepId: salesRepObjectId, ...dateFilter }),
       Quote.countDocuments({ salesRepId: salesRepObjectId, ...dateFilter }),
-      Job.countDocuments({ salesRepId: salesRepObjectId, ...dateFilter }),
+      Job.countDocuments({
+        salesRepId: salesRepObjectId,
+        status: { $ne: "Cancelled" },
+        ...dateFilter,
+      }),
       Job.aggregate([
         {
           $match: {
