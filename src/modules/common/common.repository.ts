@@ -63,6 +63,52 @@ const buildDateFilter = (periodType?: string, date?: Date) => {
   return { createdAt: { $gte: start, $lt: end } };
 };
 
+const upsellToNumber = {
+  $convert: {
+    input: "$upsellValue",
+    to: "double",
+    onError: 0,
+    onNull: 0,
+  },
+};
+
+const effectiveRevenueStages = [
+  {
+    $lookup: {
+      from: "designconsultations",
+      let: { jobId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: { $eq: ["$jobId", "$$jobId"] },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalUpsell: { $sum: upsellToNumber },
+          },
+        },
+      ],
+      as: "dcAgg",
+    },
+  },
+  {
+    $addFields: {
+      totalUpsellValue: {
+        $ifNull: [{ $arrayElemAt: ["$dcAgg.totalUpsell", 0] }, 0],
+      },
+    },
+  },
+  {
+    $addFields: {
+      effectiveRevenue: {
+        $add: [{ $ifNull: ["$price", 0] }, "$totalUpsellValue"],
+      },
+    },
+  },
+];
+
 export class CommonRepository {
   generateSequentialId = async (prefix: string, counterName: string) => {
     const counter = await Counter.findOneAndUpdate(
@@ -149,7 +195,8 @@ export class CommonRepository {
       Job.countDocuments({ status: "Cancelled", ...dateFilter }),
       Job.aggregate([
         { $match: { status: { $ne: "Cancelled" }, ...dateFilter } },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
       DesignConsultation.aggregate([
         { $match: { ...dateFilter } },
@@ -157,19 +204,23 @@ export class CommonRepository {
       ]),
       Job.aggregate([
         { $match: { status: "Scheduled and Open", ...dateFilter } },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
       Job.aggregate([
         { $match: { status: "Pending Close", ...dateFilter } },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
       Job.aggregate([
         { $match: { status: "Closed", ...dateFilter } },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
       Job.aggregate([
         { $match: { status: { $ne: "Cancelled" }, ...dateFilter } },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
     ]);
 
@@ -290,7 +341,8 @@ export class CommonRepository {
             createdAt: { $gte: start, $lt: end },
           },
         },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
       Job.aggregate([
         {
@@ -300,7 +352,8 @@ export class CommonRepository {
             createdAt: { $gte: start, $lt: end },
           },
         },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
       Job.aggregate([
         {
@@ -310,7 +363,8 @@ export class CommonRepository {
             updatedAt: { $gte: start, $lt: end },
           },
         },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
       Job.aggregate([
         {
@@ -320,7 +374,8 @@ export class CommonRepository {
             startDate: { $gte: start, $lt: end },
           },
         },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
       Job.aggregate([
         {
@@ -330,7 +385,8 @@ export class CommonRepository {
             updatedAt: { $gte: start, $lt: end },
           },
         },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
     ]);
 
@@ -386,7 +442,8 @@ export class CommonRepository {
             ...dateFilter,
           },
         },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
       Job.aggregate([
         {
@@ -396,7 +453,8 @@ export class CommonRepository {
             ...dateFilter,
           },
         },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
       Job.aggregate([
         {
@@ -406,7 +464,8 @@ export class CommonRepository {
             ...dateFilter,
           },
         },
-        { $group: { _id: null, total: { $sum: "$price" } } },
+        ...effectiveRevenueStages,
+        { $group: { _id: null, total: { $sum: "$effectiveRevenue" } } },
       ]),
       Variable.findOne().select("salesRepCommissionRate"),
       SalesRep.findOne({ userId: salesRepObjectId }).select(

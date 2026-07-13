@@ -44,6 +44,15 @@ const getCalendarPeriodRange = (date: Date, periodType: string) => {
   return { start, end };
 };
 
+const upsellToNumber = {
+  $convert: {
+    input: "$upsellValue",
+    to: "double",
+    onError: 0,
+    onNull: 0,
+  },
+};
+
 export class SalesRepRepository {
   findByUserId = async (userId: Types.ObjectId) => {
     logger.info({ userId }, "SalesRepRepository.findByUserId");
@@ -113,6 +122,40 @@ export class SalesRepRepository {
               },
             },
             {
+              $lookup: {
+                from: "designconsultations",
+                let: { jobId: "$_id" },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: { $eq: ["$jobId", "$$jobId"] },
+                    },
+                  },
+                  {
+                    $group: {
+                      _id: null,
+                      totalUpsell: { $sum: upsellToNumber },
+                    },
+                  },
+                ],
+                as: "dcAgg",
+              },
+            },
+            {
+              $addFields: {
+                totalUpsellValue: {
+                  $ifNull: [{ $arrayElemAt: ["$dcAgg.totalUpsell", 0] }, 0],
+                },
+              },
+            },
+            {
+              $addFields: {
+                effectiveRevenue: {
+                  $add: [{ $ifNull: ["$price", 0] }, "$totalUpsellValue"],
+                },
+              },
+            },
+            {
               $group: {
                 _id: null,
                 totalJobs: { $sum: 1 },
@@ -120,24 +163,24 @@ export class SalesRepRepository {
                   $sum: {
                     $cond: [
                       { $ne: ["$status", "Cancelled"] },
-                      "$price",
+                      "$effectiveRevenue",
                       0,
                     ],
                   },
                 },
                 totalRevenueProduced: {
                   $sum: {
-                    $cond: [{ $eq: ["$status", "Closed"] }, "$price", 0],
+                    $cond: [{ $eq: ["$status", "Closed"] }, "$effectiveRevenue", 0],
                   },
                 },
                 totalCommissionEarnedBase: {
                   $sum: {
-                    $cond: [{ $eq: ["$status", "Closed"] }, "$price", 0],
+                    $cond: [{ $eq: ["$status", "Closed"] }, "$effectiveRevenue", 0],
                   },
                 },
                 totalCommissionPaidBase: {
                   $sum: {
-                    $cond: [{ $eq: ["$status", "Closed"] }, "$price", 0],
+                    $cond: [{ $eq: ["$status", "Closed"] }, "$effectiveRevenue", 0],
                   },
                 },
                 totalCommissionPendingBase: {
@@ -146,7 +189,7 @@ export class SalesRepRepository {
                       {
                         $ne: ["$status", "Closed"],
                       },
-                      "$price",
+                      "$effectiveRevenue",
                       0,
                     ],
                   },

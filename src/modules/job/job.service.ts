@@ -305,10 +305,11 @@ export class JobService {
     if (status === "Closed" && job) {
       const updatedJob = await this.jobRepository.updateJobById(id, jobInfo);
       const salesRepUserId = this.normalizeObjectId(job.salesRepId);
+      const adjustedJob = this.applyDesignConsultationAdjustments(job);
       if (salesRepUserId) {
         await this.salesRepRepo.updateCommissionEarned(
           salesRepUserId as any,
-          job.price
+          Number(adjustedJob?.price || job.price || 0)
         );
       }
       const productionManagerId = this.normalizeObjectId(
