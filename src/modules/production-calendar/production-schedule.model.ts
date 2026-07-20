@@ -8,6 +8,13 @@ export interface RainDelayHistory {
   affectedFromDate: Date;
 }
 
+export interface ExtraDayHistory {
+  extraDays: number;
+  reason?: string;
+  addedAt: Date;
+  addedBy: Types.ObjectId;
+}
+
 export interface PainterHoursEntry {
   painter: Types.ObjectId;
   hours: number;
@@ -44,6 +51,7 @@ export interface ProductionScheduleDocument extends Document {
   painterDailyHours?: PainterDailyHoursEntry[];
   materialExpenses?: MaterialExpenseEntry[];
   rainDelayHistory: RainDelayHistory[];
+  extraDayHistory: ExtraDayHistory[];
   createdBy?: Types.ObjectId;
   updatedBy?: Types.ObjectId;
   createdAt?: Date;
@@ -57,6 +65,16 @@ const rainDelayHistorySchema = new Schema<RainDelayHistory>(
     appliedAt: { type: Date, required: true },
     appliedBy: { type: Types.ObjectId, ref: "User", required: true },
     affectedFromDate: { type: Date, required: true },
+  },
+  { _id: false }
+);
+
+const extraDayHistorySchema = new Schema<ExtraDayHistory>(
+  {
+    extraDays: { type: Number, required: true, min: 1 },
+    reason: { type: String, trim: true },
+    addedAt: { type: Date, required: true },
+    addedBy: { type: Types.ObjectId, ref: "User", required: true },
   },
   { _id: false }
 );
@@ -111,6 +129,7 @@ const productionScheduleSchema = new Schema<ProductionScheduleDocument>(
     painterDailyHours: { type: [painterDailyHoursSchema], default: [] },
     materialExpenses: { type: [materialExpenseSchema], default: [] },
     rainDelayHistory: { type: [rainDelayHistorySchema], default: [] },
+    extraDayHistory: { type: [extraDayHistorySchema], default: [] },
     createdBy: { type: Types.ObjectId, ref: "User" },
     updatedBy: { type: Types.ObjectId, ref: "User" },
   },

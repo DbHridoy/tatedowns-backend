@@ -26,14 +26,26 @@ export const ScheduleJobSchema = z.object({
 });
 
 export const UpdateScheduleSchema = z.object({
+  action: z.enum([
+    "changeStartDate",
+    "changeCrew",
+    "addExtraDays",
+    "returnToReady",
+    "cancelJob",
+    "markPendingClose",
+  ]).optional(),
   crewId: objectIdSchema.optional(),
   startDate: dateStringSchema.optional(),
   endDate: dateStringSchema.optional(),
+  effectiveDate: dateStringSchema.optional(),
   workDate: dateStringSchema.optional(),
   durationDays: z.coerce.number().int().positive().optional(),
   laborCapacityPerDay: z.coerce.number().positive().optional(),
+  extraDays: z.coerce.number().int().positive().optional(),
+  closeGap: z.coerce.boolean().optional(),
   status: z.enum(["Scheduled and Open", "Pending Close"]).optional(),
   notes: z.string().trim().optional(),
+  reason: z.string().trim().optional(),
   displayOrder: z.coerce.number().int().nonnegative().optional(),
   painterHours: z.array(painterHoursEntrySchema).optional(),
   materialExpenses: z.array(materialExpenseEntrySchema).optional(),

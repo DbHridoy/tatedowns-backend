@@ -16,6 +16,7 @@ const ACTIVE_SCHEDULE_STATUSES = new Set([
   "In Progress",
   "Delayed",
 ]);
+const NON_WORKING_WEEKDAYS = new Set([6]);
 
 const addDays = (date: Date, days: number) => {
   const next = new Date(date);
@@ -42,6 +43,112 @@ const startOfDay = (date: Date) =>
 const endOfDay = (date: Date) =>
   new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 
+const isWorkingDay = (date: Date) => !NON_WORKING_WEEKDAYS.has(startOfDay(date).getUTCDay());
+
+const toWorkingDay = (date: Date) => {
+  let current = startOfDay(date);
+  while (!isWorkingDay(current)) {
+    current = addDays(current, 1);
+  }
+  return current;
+};
+
+const addWorkingDays = (date: Date, workingDays: number) => {
+  if (!workingDays) {
+    return toWorkingDay(date);
+  }
+
+  let current = startOfDay(date);
+  const direction = workingDays > 0 ? 1 : -1;
+  let remaining = Math.abs(workingDays);
+
+  while (remaining > 0) {
+    current = addDays(current, direction);
+    if (isWorkingDay(current)) {
+      remaining -= 1;
+    }
+  }
+
+  return toWorkingDay(current);
+};
+
+const getWorkingDayDifference = (fromDate: Date, toDate: Date) => {
+  const from = startOfDay(fromDate);
+  const to = startOfDay(toDate);
+  if (from.getTime() === to.getTime()) {
+    return 0;
+  }
+
+  const direction = to > from ? 1 : -1;
+  let current = from;
+  let count = 0;
+
+  while (current.getTime() !== to.getTime()) {
+    current = addDays(current, direction);
+    if (isWorkingDay(current)) {
+      count += direction;
+    }
+  }
+
+  return count;
+};
+
+const countWorkingDaysBetweenInclusive = (startDate: Date, endDate: Date) => {
+  let current = startOfDay(startDate);
+  const end = startOfDay(endDate);
+  let total = 0;
+
+  while (current <= end) {
+    if (isWorkingDay(current)) {
+      total += 1;
+    }
+    current = addDays(current, 1);
+  }
+
+  return total;
+};
+
+const buildWorkingDaySegments = (startDate: Date, durationDays: number) => {
+  const segments: Array<{ startDate: Date; endDate: Date }> = [];
+  if (durationDays <= 0) {
+    return segments;
+  }
+
+  let current = toWorkingDay(startDate);
+  for (let index = 0; index < durationDays; index += 1) {
+    segments.push({
+      startDate: current,
+      endDate: current,
+    });
+    current = addWorkingDays(current, 1);
+  }
+
+  return segments;
+};
+
+const shiftSegmentsByWorkingDays = (
+  segments: Array<{ startDate: Date; endDate: Date }>,
+  workingDays: number
+) =>
+  segments.map((segment) => ({
+    startDate: addWorkingDays(segment.startDate, workingDays),
+    endDate: addWorkingDays(segment.endDate, workingDays),
+  }));
+
+const getUniqueWorkedDates = (schedule: any) => {
+  const uniqueDates = new Map<string, Date>();
+  const entries = Array.isArray(schedule?.painterDailyHours)
+    ? schedule.painterDailyHours
+    : [];
+
+  entries.forEach((entry: any) => {
+    const date = startOfDay(new Date(entry?.workDate));
+    uniqueDates.set(date.toISOString(), date);
+  });
+
+  return [...uniqueDates.values()].sort((left, right) => left.getTime() - right.getTime());
+};
+
 const normalizeScheduleSegments = (item: any) => {
   const segments = Array.isArray(item?.scheduleSegments) && item.scheduleSegments.length
     ? item.scheduleSegments
@@ -65,10 +172,11 @@ const summarizeScheduleSegments = (segments: Array<{ startDate: Date; endDate: D
     return null;
   }
 
-  const totalWorkingDays = segments.reduce((total, segment) => {
-    const diff = segment.endDate.getTime() - segment.startDate.getTime();
-    return total + Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
-  }, 0);
+  const totalWorkingDays = segments.reduce(
+    (total, segment) =>
+      total + countWorkingDaysBetweenInclusive(segment.startDate, segment.endDate),
+    0
+  );
 
   return {
     startDate: segments[0].startDate,
@@ -93,8 +201,8 @@ const shiftSegmentsFromDate = (
 
     if (segment.startDate >= threshold) {
       shiftedSegments.push({
-        startDate: addDays(segment.startDate, delayDays),
-        endDate: addDays(segment.endDate, delayDays),
+        startDate: addWorkingDays(segment.startDate, delayDays),
+        endDate: addWorkingDays(segment.endDate, delayDays),
       });
       continue;
     }
@@ -108,8 +216,8 @@ const shiftSegmentsFromDate = (
     }
 
     shiftedSegments.push({
-      startDate: addDays(threshold, delayDays),
-      endDate: addDays(segment.endDate, delayDays),
+      startDate: addWorkingDays(threshold, delayDays),
+      endDate: addWorkingDays(segment.endDate, delayDays),
     });
   }
 
@@ -146,10 +254,310 @@ export class ProductionCalendarService {
   private getPainterIdsForCrew = (crew: any) =>
     (crew?.painters || []).map((p: any) => p._id?.toString?.() || p.toString());
 
+  private getScheduleSummary = (item: any) =>
+    summarizeScheduleSegments(normalizeScheduleSegments(item));
+
+  private syncJobStartDate = async (jobId: string, startDate?: Date | null) => {
+    if (!jobId) {
+      return;
+    }
+
+    await Job.findByIdAndUpdate(jobId, {
+      startDate: startDate ? startOfDay(startDate) : null,
+    });
+  };
+
+  private shiftWholeSchedule = async (item: any, workingDayDelta: number, userId: string) => {
+    if (!workingDayDelta) {
+      return item;
+    }
+
+    const shiftedSegments = shiftSegmentsByWorkingDays(
+      normalizeScheduleSegments(item),
+      workingDayDelta
+    );
+    const summary = summarizeScheduleSegments(shiftedSegments);
+    if (!summary) {
+      return item;
+    }
+
+    return this.productionCalendarRepository.updateScheduleItem(String(item._id), {
+      startDate: summary.startDate,
+      endDate: summary.endDate,
+      durationDays: summary.durationDays,
+      scheduleSegments: shiftedSegments,
+      updatedBy: userId,
+    });
+  };
+
+  private shiftLaterCrewSchedules = async (
+    crewId: string,
+    thresholdDate: Date,
+    workingDayDelta: number,
+    userId: string,
+    excludedScheduleId?: string
+  ) => {
+    if (!workingDayDelta) {
+      return;
+    }
+
+    const schedules = await this.productionCalendarRepository.findCrewSchedulesFromDate(
+      crewId,
+      thresholdDate
+    );
+
+    for (const item of schedules) {
+      if (excludedScheduleId && String(item._id) === excludedScheduleId) {
+        continue;
+      }
+      if (startOfDay(new Date(item.startDate)) < thresholdDate) {
+        continue;
+      }
+      await this.shiftWholeSchedule(item, workingDayDelta, userId);
+    }
+  };
+
+  private ensureCrewConflictFree = async (
+    crewId: string,
+    segments: Array<{ startDate: Date; endDate: Date }>,
+    excludedScheduleId?: string
+  ) => {
+    const schedules = await this.productionCalendarRepository.findCrewSchedulesFromDate(
+      crewId,
+      segments[0]?.startDate || new Date()
+    );
+    const targetKeys = new Set(
+      segments.map((segment) => startOfDay(segment.startDate).toISOString())
+    );
+
+    for (const schedule of schedules) {
+      if (excludedScheduleId && String(schedule._id) === excludedScheduleId) {
+        continue;
+      }
+
+      const scheduleSegments = normalizeScheduleSegments(schedule);
+      const hasOverlap = scheduleSegments.some((segment: { startDate: Date; endDate: Date }) =>
+        targetKeys.has(startOfDay(segment.startDate).toISOString())
+      );
+      if (hasOverlap) {
+        throw new apiError(
+          Errors.BadRequest.code,
+          "Selected crew already has a scheduled job on one or more of those production days"
+        );
+      }
+    }
+  };
+
+  private buildRemainingWorkSegments = (schedule: any, requestedStartDate: Date) => {
+    const workedDates = getUniqueWorkedDates(schedule);
+    if (!workedDates.length) {
+      return buildWorkingDaySegments(requestedStartDate, Number(schedule.durationDays || 1));
+    }
+
+    const workedSegments = workedDates.map((date) => ({
+      startDate: date,
+      endDate: date,
+    }));
+    const remainingDays = Math.max(0, Number(schedule.durationDays || 0) - workedDates.length);
+    if (!remainingDays) {
+      return workedSegments;
+    }
+
+    const lastWorkedDate = workedDates[workedDates.length - 1];
+    const normalizedRequestedStart = toWorkingDay(requestedStartDate);
+    const remainingStart =
+      normalizedRequestedStart <= lastWorkedDate
+        ? addWorkingDays(lastWorkedDate, 1)
+        : normalizedRequestedStart;
+
+    return [
+      ...workedSegments,
+      ...buildWorkingDaySegments(remainingStart, remainingDays),
+    ].sort((left, right) => left.startDate.getTime() - right.startDate.getTime());
+  };
+
+  private applyManagementAction = async (schedule: any, payload: any, user: any) => {
+    const action = String(payload.action || "");
+    const scheduleId = String(schedule._id);
+    const jobId = String((schedule.job as any)?._id || schedule.job);
+    const currentCrewId = String((schedule.crew as any)?._id || schedule.crew);
+    const currentSummary = this.getScheduleSummary(schedule);
+    if (!currentSummary) {
+      throw new apiError(Errors.BadRequest.code, "Schedule segments are invalid");
+    }
+
+    if (action === "changeStartDate") {
+      const nextStartDate = toWorkingDay(parseCalendarDate(String(payload.startDate)));
+      const nextSegments = getUniqueWorkedDates(schedule).length
+        ? this.buildRemainingWorkSegments(schedule, nextStartDate)
+        : buildWorkingDaySegments(nextStartDate, Number(schedule.durationDays || 1));
+      const nextSummary = summarizeScheduleSegments(nextSegments);
+      if (!nextSummary) {
+        throw new apiError(Errors.BadRequest.code, "Unable to recalculate schedule");
+      }
+
+      const updated = await this.productionCalendarRepository.updateScheduleItem(scheduleId, {
+        startDate: nextSummary.startDate,
+        endDate: nextSummary.endDate,
+        durationDays: nextSummary.durationDays,
+        scheduleSegments: nextSegments,
+        updatedBy: user.userId,
+      });
+      const delta = getWorkingDayDifference(currentSummary.endDate, nextSummary.endDate);
+      await this.shiftLaterCrewSchedules(
+        currentCrewId,
+        addDays(currentSummary.endDate, 1),
+        delta,
+        user.userId,
+        scheduleId
+      );
+      await this.syncJobStartDate(jobId, nextSummary.startDate);
+      return updated;
+    }
+
+    if (action === "changeCrew") {
+      const nextCrewId = String(payload.crewId || "");
+      if (!nextCrewId) {
+        throw new apiError(Errors.BadRequest.code, "crewId is required");
+      }
+      const crew = await Crew.findById(nextCrewId).populate("painters", "_id fullName role");
+      if (!crew) {
+        throw new apiError(Errors.NotFound.code, "Crew not found");
+      }
+      if (crew.status !== "Active") {
+        throw new apiError(Errors.BadRequest.code, "Crew must be active");
+      }
+
+      const nextSegments = getUniqueWorkedDates(schedule).length
+        ? this.buildRemainingWorkSegments(schedule, currentSummary.startDate)
+        : normalizeScheduleSegments(schedule);
+      await this.ensureCrewConflictFree(nextCrewId, nextSegments, scheduleId);
+      const updated = await this.productionCalendarRepository.updateScheduleItem(scheduleId, {
+        crew: nextCrewId,
+        updatedBy: user.userId,
+      });
+      return updated;
+    }
+
+    if (action === "addExtraDays") {
+      const extraDays = Number(payload.extraDays || 0);
+      if (extraDays <= 0) {
+        throw new apiError(Errors.BadRequest.code, "extraDays must be greater than 0");
+      }
+
+      const existingSegments = normalizeScheduleSegments(schedule);
+      const lastSegment = existingSegments[existingSegments.length - 1];
+      const extraSegments = buildWorkingDaySegments(
+        addWorkingDays(lastSegment.endDate, 1),
+        extraDays
+      );
+      const nextSegments = [...existingSegments, ...extraSegments];
+      const nextSummary = summarizeScheduleSegments(nextSegments);
+      if (!nextSummary) {
+        throw new apiError(Errors.BadRequest.code, "Unable to extend schedule");
+      }
+
+      const updated = await this.productionCalendarRepository.updateScheduleItem(scheduleId, {
+        startDate: nextSummary.startDate,
+        endDate: nextSummary.endDate,
+        durationDays: nextSummary.durationDays,
+        scheduleSegments: nextSegments,
+        extraDayHistory: [
+          ...(((schedule as any).extraDayHistory || []) as any[]),
+          {
+            extraDays,
+            reason: payload.reason,
+            addedAt: new Date(),
+            addedBy: user.userId,
+          },
+        ],
+        updatedBy: user.userId,
+      });
+      await this.shiftLaterCrewSchedules(
+        currentCrewId,
+        addDays(currentSummary.endDate, 1),
+        extraDays,
+        user.userId,
+        scheduleId
+      );
+      return updated;
+    }
+
+    if (action === "returnToReady" || action === "cancelJob") {
+      const closeGap = Boolean(payload.closeGap);
+      await this.productionCalendarRepository.deleteScheduleItem(scheduleId);
+
+      if (closeGap) {
+        await this.shiftLaterCrewSchedules(
+          currentCrewId,
+          addDays(currentSummary.endDate, 1),
+          -Number(schedule.durationDays || 0),
+          user.userId
+        );
+      }
+
+      await Job.findByIdAndUpdate(jobId, {
+        status: action === "cancelJob" ? "Cancelled" : "Ready to Schedule",
+        startDate: null,
+        ...(action === "returnToReady" ? { productionManagerId: null } : {}),
+      });
+
+      return {
+        _id: scheduleId,
+        removed: true,
+        action,
+      };
+    }
+
+    if (action === "markPendingClose") {
+      const closeGap = Boolean(payload.closeGap);
+      const effectiveDate = payload.effectiveDate
+        ? toWorkingDay(parseCalendarDate(String(payload.effectiveDate)))
+        : currentSummary.endDate;
+      const currentSegments = normalizeScheduleSegments(schedule);
+      const keptSegments = currentSegments.filter(
+        (segment: { startDate: Date; endDate: Date }) => segment.startDate <= effectiveDate
+      );
+      const nextSummary = summarizeScheduleSegments(keptSegments);
+      if (!nextSummary) {
+        throw new apiError(Errors.BadRequest.code, "Unable to mark job pending close");
+      }
+      const freedDays = Math.max(0, currentSegments.length - keptSegments.length);
+
+      const updated = await this.productionCalendarRepository.updateScheduleItem(scheduleId, {
+        status: "Pending Close",
+        startDate: nextSummary.startDate,
+        endDate: nextSummary.endDate,
+        durationDays: nextSummary.durationDays,
+        scheduleSegments: keptSegments,
+        updatedBy: user.userId,
+      });
+
+      if (closeGap && freedDays > 0) {
+        await this.shiftLaterCrewSchedules(
+          currentCrewId,
+          addDays(currentSummary.endDate, 1),
+          -freedDays,
+          user.userId,
+          scheduleId
+        );
+      }
+
+      await Job.findByIdAndUpdate(jobId, {
+        status: "Pending Close",
+      });
+
+      return updated;
+    }
+
+    throw new apiError(Errors.BadRequest.code, "Unsupported schedule action");
+  };
+
   private sanitizeManagementSchedule = (item: any) => {
     const base = item.toObject ? item.toObject() : item;
     return {
       ...base,
+      extraDayHistory: base?.extraDayHistory || [],
       costSummary: buildJobCostSummary({
         jobPrice: Number(base?.job?.price || 0),
         painterDailyHours: base?.painterDailyHours || [],
@@ -173,6 +581,7 @@ export class ProductionCalendarService {
       displayOrder: base.displayOrder,
       jobSiteLocation: base.jobSiteLocation,
       rainDelayHistory: base.rainDelayHistory || [],
+      extraDayHistory: base.extraDayHistory || [],
       canPainterUpdateStatus,
       crew: base.crew
         ? {
@@ -314,21 +723,25 @@ export class ProductionCalendarService {
     const durationDays = Number(
       payload.durationDays || Math.max(1, Math.ceil(estimatedLaborHours / laborCapacityPerDay))
     );
-    const startDate = startOfDay(parseCalendarDate(payload.startDate));
-    const endDate = addDays(startDate, durationDays - 1);
+    const startDate = toWorkingDay(parseCalendarDate(payload.startDate));
+    const scheduleSegments = buildWorkingDaySegments(startDate, durationDays);
+    const summary = summarizeScheduleSegments(scheduleSegments);
+    if (!summary) {
+      throw new apiError(Errors.BadRequest.code, "Unable to build schedule segments");
+    }
 
     const item = await this.productionCalendarRepository.createScheduleItem({
       job: job._id,
       client: (job.clientId as any)._id,
       quote: job.quoteId,
       crew: crew._id,
-      startDate,
-      endDate,
-      durationDays,
+      startDate: summary.startDate,
+      endDate: summary.endDate,
+      durationDays: summary.durationDays,
       estimatedLaborHours,
       laborCapacityPerDay,
       status: "Scheduled and Open",
-      scheduleSegments: [{ startDate, endDate }],
+      scheduleSegments,
       displayOrder: payload.displayOrder || 0,
       jobSiteLocation: this.buildSiteLocation(job.clientId),
       notes: payload.notes,
@@ -339,7 +752,7 @@ export class ProductionCalendarService {
     await Job.findByIdAndUpdate(job._id, {
       status: "Scheduled and Open",
       productionManagerId: user.userId,
-      startDate,
+      startDate: summary.startDate,
     });
 
     const painterIds = this.getPainterIdsForCrew(crew);
@@ -423,26 +836,36 @@ export class ProductionCalendarService {
       throw new apiError(Errors.NotFound.code, "Schedule item not found");
     }
 
+    if (payload.action) {
+      const actionResult = await this.applyManagementAction(schedule, payload, user);
+      if ((actionResult as any)?.removed) {
+        return actionResult;
+      }
+
+      const refreshedActionResult = await this.productionCalendarRepository.getScheduleById(id);
+      return refreshedActionResult
+        ? this.sanitizeManagementSchedule(refreshedActionResult)
+        : actionResult;
+    }
+
     const nextPayload: any = {
       ...payload,
       updatedBy: user.userId,
     };
     if (payload.startDate || payload.durationDays || payload.endDate) {
       const startDate = payload.startDate
-        ? startOfDay(parseCalendarDate(String(payload.startDate)))
+        ? toWorkingDay(parseCalendarDate(String(payload.startDate)))
         : startOfDay(new Date(schedule.startDate));
       const durationDays = Number(payload.durationDays || schedule.durationDays);
-      nextPayload.startDate = startDate;
-      nextPayload.durationDays = durationDays;
-      nextPayload.endDate = payload.endDate
-        ? startOfDay(parseCalendarDate(String(payload.endDate)))
-        : addDays(startDate, durationDays - 1);
-      nextPayload.scheduleSegments = [
-        {
-          startDate: nextPayload.startDate,
-          endDate: nextPayload.endDate,
-        },
-      ];
+      const scheduleSegments = buildWorkingDaySegments(startDate, durationDays);
+      const summary = summarizeScheduleSegments(scheduleSegments);
+      if (!summary) {
+        throw new apiError(Errors.BadRequest.code, "Unable to recalculate schedule");
+      }
+      nextPayload.startDate = summary.startDate;
+      nextPayload.durationDays = summary.durationDays;
+      nextPayload.endDate = summary.endDate;
+      nextPayload.scheduleSegments = scheduleSegments;
     }
 
     if (Array.isArray(payload.painterHours)) {
@@ -552,6 +975,11 @@ export class ProductionCalendarService {
       status,
       updatedBy: user.userId,
     });
+    if (schedule?.job) {
+      await Job.findByIdAndUpdate((schedule.job as any)._id || schedule.job, {
+        status,
+      });
+    }
 
     if (updated?.crew) {
       const crew = await Crew.findById((updated.crew as any)._id || updated.crew).populate(
@@ -651,6 +1079,13 @@ export class ProductionCalendarService {
     }
 
     const refreshed = await this.productionCalendarRepository.getScheduleById(scheduleItemId);
+    if (refreshed?.job) {
+      const summary = this.getScheduleSummary(refreshed);
+      await this.syncJobStartDate(
+        String((refreshed.job as any)._id || refreshed.job),
+        summary?.startDate
+      );
+    }
     return refreshed ? this.sanitizeManagementSchedule(refreshed) : refreshed;
   };
 

@@ -58,6 +58,14 @@ export class ProductionCalendarRepository {
       .populate("createdBy updatedBy", "fullName email role");
   };
 
+  deleteScheduleItem = async (id: string) => {
+    return ProductionSchedule.findByIdAndDelete(id);
+  };
+
+  deleteSchedulesByJob = async (jobId: string) => {
+    return ProductionSchedule.deleteMany({ job: jobId });
+  };
+
   getCalendarItems = async (query: any) => {
     const {
       startDate: _startDate,

@@ -280,11 +280,25 @@ export class JobService {
       return updatedJob;
     }
     if (status === "Ready to Schedule") {
+      await ProductionSchedule.deleteMany({ job: id });
+      jobInfo.startDate = null;
+      jobInfo.productionManagerId = null;
       const updatedJob = await this.jobRepository.updateJobById(id, jobInfo);
       await createNotificationsForRole("Production Manager", {
         type: "job_status_ready_to_schedule",
         message: "A job is ready to schedule",
       });
+      await this.notifyJobStatusChange(
+        previousStatus,
+        updatedJob?.status?.toString(),
+        updatedJob || job
+      );
+      return updatedJob;
+    }
+    if (status === "Cancelled") {
+      await ProductionSchedule.deleteMany({ job: id });
+      jobInfo.startDate = null;
+      const updatedJob = await this.jobRepository.updateJobById(id, jobInfo);
       await this.notifyJobStatusChange(
         previousStatus,
         updatedJob?.status?.toString(),
