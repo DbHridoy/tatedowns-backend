@@ -16,7 +16,7 @@ const ACTIVE_SCHEDULE_STATUSES = new Set([
   "In Progress",
   "Delayed",
 ]);
-const NON_WORKING_WEEKDAYS = new Set([6]);
+const NON_WORKING_WEEKDAYS = new Set([0, 6]);
 
 const addDays = (date: Date, days: number) => {
   const next = new Date(date);
@@ -149,6 +149,10 @@ const getUniqueWorkedDates = (schedule: any) => {
   return [...uniqueDates.values()].sort((left, right) => left.getTime() - right.getTime());
 };
 
+const getWeekendExceptionDateKeys = (item: any) =>
+  (Array.isArray(item?.weekendExceptionDates) ? item.weekendExceptionDates : [])
+    .map((value: any) => startOfDay(new Date(value)).toISOString());
+
 const normalizeScheduleSegments = (item: any) => {
   const segments = Array.isArray(item?.scheduleSegments) && item.scheduleSegments.length
     ? item.scheduleSegments
@@ -236,9 +240,14 @@ const shiftSegmentsFromDate = (
 
 const isDateWithinScheduleSegments = (item: any, targetDate: Date) => {
   const segments = normalizeScheduleSegments(item);
+  const normalizedTarget = startOfDay(targetDate);
+  if (getWeekendExceptionDateKeys(item).includes(normalizedTarget.toISOString())) {
+    return true;
+  }
+
   return segments.some(
     (segment: { startDate: Date; endDate: Date }) =>
-      targetDate >= segment.startDate && targetDate <= segment.endDate
+      normalizedTarget >= segment.startDate && normalizedTarget <= segment.endDate
   );
 };
 
@@ -550,6 +559,40 @@ export class ProductionCalendarService {
       return updated;
     }
 
+    if (action === "markWeekendException") {
+      const workDate = payload.workDate
+        ? startOfDay(parseCalendarDate(String(payload.workDate)))
+        : null;
+      if (!workDate) {
+        throw new apiError(Errors.BadRequest.code, "workDate is required");
+      }
+      if (isWorkingDay(workDate)) {
+        throw new apiError(
+          Errors.BadRequest.code,
+          "Weekend exceptions can only be created for Saturday or Sunday"
+        );
+      }
+      if (workDate < currentSummary.startDate || workDate > currentSummary.endDate) {
+        throw new apiError(
+          Errors.BadRequest.code,
+          "Weekend exception date must fall within the scheduled job span"
+        );
+      }
+
+      const existingDates = getWeekendExceptionDateKeys(schedule);
+      const nextDateKey = workDate.toISOString();
+      const nextWeekendExceptionDates = existingDates.includes(nextDateKey)
+        ? Array.from(new Set(existingDates))
+        : [...existingDates, nextDateKey];
+
+      const updated = await this.productionCalendarRepository.updateScheduleItem(scheduleId, {
+        weekendExceptionDates: nextWeekendExceptionDates.map((value) => new Date(value)),
+        updatedBy: user.userId,
+      });
+
+      return updated;
+    }
+
     throw new apiError(Errors.BadRequest.code, "Unsupported schedule action");
   };
 
@@ -558,6 +601,7 @@ export class ProductionCalendarService {
     return {
       ...base,
       extraDayHistory: base?.extraDayHistory || [],
+      weekendExceptionDates: base?.weekendExceptionDates || [],
       costSummary: buildJobCostSummary({
         jobPrice: Number(base?.job?.price || 0),
         painterDailyHours: base?.painterDailyHours || [],
@@ -582,6 +626,7 @@ export class ProductionCalendarService {
       jobSiteLocation: base.jobSiteLocation,
       rainDelayHistory: base.rainDelayHistory || [],
       extraDayHistory: base.extraDayHistory || [],
+      weekendExceptionDates: base.weekendExceptionDates || [],
       canPainterUpdateStatus,
       crew: base.crew
         ? {
@@ -729,6 +774,7 @@ export class ProductionCalendarService {
     if (!summary) {
       throw new apiError(Errors.BadRequest.code, "Unable to build schedule segments");
     }
+    await this.ensureCrewConflictFree(String(crew._id), scheduleSegments);
 
     const item = await this.productionCalendarRepository.createScheduleItem({
       job: job._id,

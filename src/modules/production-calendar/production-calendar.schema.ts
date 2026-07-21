@@ -33,6 +33,7 @@ export const UpdateScheduleSchema = z.object({
     "returnToReady",
     "cancelJob",
     "markPendingClose",
+    "markWeekendException",
   ]).optional(),
   crewId: objectIdSchema.optional(),
   startDate: dateStringSchema.optional(),

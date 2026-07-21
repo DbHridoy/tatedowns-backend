@@ -52,6 +52,7 @@ export interface ProductionScheduleDocument extends Document {
   materialExpenses?: MaterialExpenseEntry[];
   rainDelayHistory: RainDelayHistory[];
   extraDayHistory: ExtraDayHistory[];
+  weekendExceptionDates: Date[];
   createdBy?: Types.ObjectId;
   updatedBy?: Types.ObjectId;
   createdAt?: Date;
@@ -130,6 +131,7 @@ const productionScheduleSchema = new Schema<ProductionScheduleDocument>(
     materialExpenses: { type: [materialExpenseSchema], default: [] },
     rainDelayHistory: { type: [rainDelayHistorySchema], default: [] },
     extraDayHistory: { type: [extraDayHistorySchema], default: [] },
+    weekendExceptionDates: { type: [Date], default: [] },
     createdBy: { type: Types.ObjectId, ref: "User" },
     updatedBy: { type: Types.ObjectId, ref: "User" },
   },
